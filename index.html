@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/NeXsign.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- SEO Metadata -->
+    <title>NeXsign | Enterprise-Grade Digital Signatures</title>
+    <meta name="description" content="Securely sign, send, and manage your documents with NeXsign. The fastest and most reliable way to handle electronic signatures." />
+    <meta name="keywords" content="digital signature, e-sign, document management, secure signing, NeXsign" />
+    <meta name="author" content="NeXsign" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nexsign.vercel.app/" />
+    <meta property="og:title" content="NeXsign | Enterprise-Grade Digital Signatures" />
+    <meta property="og:description" content="Securely sign, send, and manage your documents with NeXsign." />
+    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://nexsign.vercel.app/" />
+    <meta property="twitter:title" content="NeXsign | Enterprise-Grade Digital Signatures" />
+    <meta property="twitter:description" content="Securely sign, send, and manage your documents with NeXsign." />
+    <meta property="twitter:image" content="/og-image.png" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      window.pdfjsLib = window['pdfjs-dist/build/pdf'];
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+  </head>
+  <body class="font-inter antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

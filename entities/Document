@@ -1,0 +1,119 @@
+{
+  "name": "Document",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Document title"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "URL of the uploaded PDF"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pending",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "default": "draft",
+      "description": "Current document status"
+    },
+    "current_party_index": {
+      "type": "number",
+      "default": 0,
+      "description": "Index of the current signer in the sequence"
+    },
+    "parties": {
+      "type": "array",
+      "description": "Ordered list of signing parties",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "order": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sent",
+              "signed"
+            ],
+            "default": "pending"
+          },
+          "color": {
+            "type": "string"
+          },
+          "signed_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "description": "Signature and text fields placed on the document",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "signature",
+              "text"
+            ]
+          },
+          "party_index": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "value": {
+            "type": "string"
+          },
+          "filled": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "completed_file_url": {
+      "type": "string",
+      "description": "URL of the final signed document"
+    },
+    "total_pages": {
+      "type": "number",
+      "default": 1
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "name": "SigningSession",
+  "type": "object",
+  "properties": {
+    "document_id": {
+      "type": "string",
+      "description": "Reference to the document"
+    },
+    "party_index": {
+      "type": "number",
+      "description": "Which party this session is for"
+    },
+    "token": {
+      "type": "string",
+      "description": "Unique secure token for signing link"
+    },
+    "signer_name": {
+      "type": "string"
+    },
+    "signer_email": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "opened",
+        "signed",
+        "expired"
+      ],
+      "default": "pending"
+    },
+    "signed_at": {
+      "type": "string"
+    },
+    "signature_data": {
+      "type": "object",
+      "description": "Signature image data or typed signature",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "draw",
+            "type"
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "field_values": {
+      "type": "array",
+      "description": "Values filled in by this signer",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field_id": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ip_address": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "document_id",
+    "token"
+  ]
+}
