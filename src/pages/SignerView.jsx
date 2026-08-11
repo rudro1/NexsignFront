@@ -3,7 +3,6 @@ import React, {
   useEffect, useState, useRef, useCallback, useMemo,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import * as pdfjsLib from 'pdfjs-dist';
 import {
   Loader2, CheckCircle2, XCircle, ChevronLeft, ChevronRight,
   ZoomIn, ZoomOut, PenLine, Send, Shield, ShieldCheck,
@@ -12,10 +11,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { api } from '@/api/apiClient';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import { api, documentApi } from '@/api/apiClient';
+import { loadPdfDocument } from '@/utils/loadPdfDocument';
 
 const cn = (...c) => c.filter(Boolean).join(' ');
 
@@ -111,7 +108,7 @@ function SignatureModal({ isOpen, onClose, onAccept, fieldType = 'signature' }) 
     link.rel   = 'stylesheet';
     link.href  = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap';
     document.head.appendChild(link);
-    return () => { try { document.head.removeChild(link); } catch {} };
+    return () => { try { link.remove(); } catch {} };
   }, [isOpen]);
 
   useEffect(() => {
@@ -472,7 +469,8 @@ function PdfRenderer({
   const renderRef     = useRef(null);
   const debounceRef   = useRef(null);
   const retryTimerRef = useRef(null);
-  const abortRef      = useRef(null);
+  const renderIdRef   = useRef(0);
+  const mountedRef    = useRef(true);
 
   // pdfState: idle | loading | ready | error
   const [pdfState,     setPdfState]     = useState('idle');
@@ -494,79 +492,88 @@ function PdfRenderer({
     return f?.id || null;
   }, [pageFields, signerIndex]);
 
+  const destroyPdf = useCallback(() => {
+    if (renderRef.current) {
+      try { renderRef.current.cancel(); } catch (_) {}
+      renderRef.current = null;
+    }
+    if (pdfDocRef.current) {
+      try { pdfDocRef.current.destroy(); } catch (_) {}
+      pdfDocRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      destroyPdf();
+      clearInterval(retryTimerRef.current);
+      clearTimeout(debounceRef.current);
+    };
+  }, [destroyPdf]);
+
   // ── LOAD PDF ─────────────────────────────────────
   useEffect(() => {
     if (!pdfUrl) return;
     let cancelled = false;
 
     const load = async () => {
-      setPdfState('loading');
-      setLoadPct(0);
-      pdfDocRef.current = null;
+      destroyPdf();
+      if (mountedRef.current) {
+        setPdfState('loading');
+        setLoadPct(0);
+        setCanvasSize({ width: 0, height: 0 });
+      }
 
       // Fake progress so user sees activity
       let fakePct = 0;
       const fakeTimer = setInterval(() => {
         fakePct = Math.min(fakePct + Math.random() * 12, 80);
-        if (!cancelled) setLoadPct(Math.round(fakePct));
+        if (!cancelled && mountedRef.current) setLoadPct(Math.round(fakePct));
       }, 350);
 
       try {
-        const loadTask = pdfjsLib.getDocument({
-          url:             pdfUrl,
-          withCredentials: false,
-          cMapPacked:      true,
-          disableStream:   false,
-          rangeChunkSize:  65536,
+        const doc = await loadPdfDocument(pdfUrl, {
+          onProgress: ({ loaded, total }) => {
+            if (total > 0 && !cancelled && mountedRef.current) {
+              setLoadPct(Math.round((loaded / total) * 90));
+            }
+          },
         });
 
-        // Real progress from pdf.js
-        loadTask.onProgress = ({ loaded, total }) => {
-          if (total > 0 && !cancelled) {
-            setLoadPct(Math.round((loaded / total) * 90));
-          }
-        };
-
-        // 35s hard timeout
-        const doc = await Promise.race([
-          loadTask.promise,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('PDF_TIMEOUT')), 35_000)
-          ),
-        ]);
-
         clearInterval(fakeTimer);
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) {
+          try { doc.destroy(); } catch (_) {}
+          return;
+        }
 
         pdfDocRef.current = doc;
         onTotalPages?.(doc.numPages);
         setLoadPct(100);
 
-        // Smooth transition
         await new Promise(r => setTimeout(r, 200));
-        if (!cancelled) {
-          setPdfState('ready');
-          // Render right away
-          renderPageFn(doc, currentPage, scale);
-        }
+        if (cancelled || !mountedRef.current) return;
+
+        setPdfState('ready');
+        renderPageFn(doc, currentPage, scale);
 
       } catch (err) {
         clearInterval(fakeTimer);
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) return;
         console.error('[PDF] Load failed:', err?.message);
         setPdfState('error');
 
-        // Auto-retry countdown
         if (retryCount < MAX_RETRIES) {
           const delay    = Math.pow(2, retryCount) * 2000;
           let countdown  = Math.ceil(delay / 1000);
           setRetryIn(countdown);
           retryTimerRef.current = setInterval(() => {
             countdown -= 1;
-            setRetryIn(countdown);
+            if (mountedRef.current) setRetryIn(countdown);
             if (countdown <= 0) {
               clearInterval(retryTimerRef.current);
-              if (!cancelled) setRetryCount(c => c + 1);
+              if (!cancelled && mountedRef.current) setRetryCount(c => c + 1);
             }
           }, 1000);
         }
@@ -576,22 +583,29 @@ function PdfRenderer({
     load();
     return () => {
       cancelled = true;
+      destroyPdf();
       clearInterval(retryTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfUrl, retryCount]);
+  }, [pdfUrl, retryCount, destroyPdf]);
 
   // ── RENDER PAGE ───────────────────────────────────
   const renderPageFn = useCallback(async (docRef, page, sc) => {
     const doc    = docRef || pdfDocRef.current;
     const canvas = canvasRef.current;
     const wrap   = containerRef.current;
-    if (!doc || !canvas || !wrap) return;
+    if (!doc || !canvas || !wrap || !mountedRef.current) return;
 
+    const myId = ++renderIdRef.current;
     try { renderRef.current?.cancel(); } catch (_) {}
+    renderRef.current = null;
+    await new Promise(r => setTimeout(r, 10));
+    if (myId !== renderIdRef.current || !mountedRef.current) return;
 
     try {
       const pg    = await doc.getPage(page);
+      if (myId !== renderIdRef.current || !mountedRef.current) return;
+
       const avail = Math.max(wrap.clientWidth - 32, 300);
       const base  = pg.getViewport({ scale: 1 });
       const fit   = avail / base.width;
@@ -604,13 +618,17 @@ function PdfRenderer({
       canvas.style.height = `${vp.height}px`;
 
       const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
-      setCanvasSize({ width: vp.width, height: vp.height });
+      if (mountedRef.current) setCanvasSize({ width: vp.width, height: vp.height });
 
       renderRef.current = pg.render({ canvasContext: ctx, viewport: vp });
       await renderRef.current.promise;
+      if (myId !== renderIdRef.current) return;
+      renderRef.current = null;
     } catch (e) {
       if (e?.name !== 'RenderingCancelledException') console.error('[PDF render]', e);
+      renderRef.current = null;
     }
   }, []);
 
@@ -731,11 +749,38 @@ function PdfRenderer({
       {/* Canvas area */}
       <div ref={scrollRef}
            className="flex-1 overflow-auto bg-slate-200 dark:bg-slate-950 p-3 sm:p-5">
-        <div ref={containerRef}>
+        <div ref={containerRef} className="relative min-h-[320px]">
 
-          {/* Loading skeleton */}
+          {/* PDF canvas — always mounted */}
+          <div
+            className={cn(
+              'relative mx-auto bg-white shadow-2xl shadow-black/20 rounded-sm',
+              'transition-opacity duration-300',
+              isReady ? 'opacity-100' : 'opacity-0 pointer-events-none',
+            )}
+            style={{
+              width:  canvasSize.width  || 'auto',
+              height: canvasSize.height || 'auto',
+            }}
+            aria-hidden={!isReady}
+          >
+            <canvas ref={canvasRef} className="block rounded-sm" />
+            {isReady && canvasSize.width > 0 && pageFields.map(field => (
+              <FieldOverlay
+                key={field.id}
+                field={field}
+                isMine={field.partyIndex === signerIndex}
+                isHighlighted={field.id === firstUnfilledId}
+                onClick={onFieldClick}
+                onChange={onFieldChange}
+                canvasW={canvasSize.width}
+              />
+            ))}
+          </div>
+
+          {/* Loading overlay */}
           {isLoading && (
-            <div className="flex flex-col items-center gap-6 py-8">
+            <div className="absolute inset-0 flex flex-col items-center gap-6 py-8 bg-slate-200 dark:bg-slate-950">
               <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden">
                 <div className="p-8 space-y-4 animate-pulse" style={{ minHeight: 550 }}>
                   <div className="h-6 bg-slate-200 rounded-lg w-2/3 mx-auto" />
@@ -769,9 +814,9 @@ function PdfRenderer({
             </div>
           )}
 
-          {/* Error */}
+          {/* Error overlay */}
           {isError && (
-            <div className="flex flex-col items-center gap-5 py-16 text-center">
+            <div className="absolute inset-0 flex flex-col items-center gap-5 py-16 text-center bg-slate-200 dark:bg-slate-950">
               <div className="w-16 h-16 rounded-2xl bg-red-50
                               flex items-center justify-center">
                 <WifiOff className="w-7 h-7 text-red-400" />
@@ -812,32 +857,6 @@ function PdfRenderer({
               </div>
             </div>
           )}
-
-          {/* PDF canvas */}
-          <div
-            className={cn(
-              'relative mx-auto bg-white shadow-2xl shadow-black/20 rounded-sm',
-              'transition-opacity duration-300',
-              isReady ? 'opacity-100' : 'opacity-0 absolute pointer-events-none',
-            )}
-            style={{
-              width:  canvasSize.width  || 'auto',
-              height: canvasSize.height || 'auto',
-            }}
-          >
-            <canvas ref={canvasRef} className="block rounded-sm" />
-            {isReady && canvasSize.width > 0 && pageFields.map(field => (
-              <FieldOverlay
-                key={field.id}
-                field={field}
-                isMine={field.partyIndex === signerIndex}
-                isHighlighted={field.id === firstUnfilledId}
-                onClick={onFieldClick}
-                onChange={onFieldChange}
-                canvasW={canvasSize.width}
-              />
-            ))}
-          </div>
 
           {/* Page dots */}
           {isReady && totalPages > 1 && totalPages <= 20 && (
@@ -941,7 +960,7 @@ export default function SignerView() {
     const ctrl = new AbortController();
     (async () => {
       try {
-        const res = await api.get(`/documents/sign/validate/${token}`, {
+        const res = await documentApi.validateToken(token, {
           signal: ctrl.signal,
         });
         if (!mountedRef.current) return;
@@ -956,21 +975,15 @@ export default function SignerView() {
         setFields(allFields);
         setTotalPages(doc.totalPages || 1);
 
-        // ✅ Proxy URL — avoids CORS & Cloudinary issues
-        const base = (
-          import.meta.env.VITE_API_URL ||
-          'https://nextsignbackendfinal.vercel.app'
-        ).replace(/\/api\/?$/, '').replace(/\/$/, '');
-
-        setPdfUrl(`${base}/api/documents/sign/${token}/pdf`);
+        setPdfUrl(documentApi.getPdfProxy(token));
         setPhase('ready');
         jumpToFirstFieldPage(allFields, party.index);
 
       } catch (err) {
-        if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+        if (err.__cancelled || err.name === 'CanceledError' || err.name === 'AbortError') return;
         if (!mountedRef.current) return;
-        const msg    = err.response?.data?.message || 'This link is invalid or expired.';
-        const status = err.response?.status;
+        const msg    = err.message || err.response?.data?.message || 'This link is invalid or expired.';
+        const status = err.status || err.response?.status;
         setErrorMsg(msg);
         setPhase(status === 410 ? 'already_signed' : 'error');
       }

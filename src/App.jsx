@@ -31,6 +31,8 @@ const Templates      = lazy(() => import('@/pages/Templates'));
 const NewTemplate    = lazy(() => import('@/pages/NewTemplate'));
 const TemplateDetail = lazy(() => import('@/pages/TemplateDetail'));
 const TemplateSigner = lazy(() => import('@/pages/TemplateSigner'));
+const TemplateCampaignBoss = lazy(() => import('@/pages/TemplateCampaignBoss'));
+const TemplateCampaignApprover = lazy(() => import('@/pages/TemplateCampaignApprover'));
 const Audit          = lazy(() => import('@/pages/Audit'));
 const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'));
 const PageNotFound   = lazy(() => import('@/lib/PageNotFound'));
@@ -186,6 +188,10 @@ function AppRoutes() {
                element={<SignerView />} />
         <Route path="/template-sign/:token"
                element={<TemplateSigner />} />
+        <Route path="/template-campaign/boss/:token"
+               element={<TemplateCampaignBoss />} />
+        <Route path="/template-campaign/approve/:token"
+               element={<TemplateCampaignApprover />} />
 
         {/* ── Protected: Dashboard ─────────────────────────── */}
         <Route

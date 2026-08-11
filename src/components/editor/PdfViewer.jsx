@@ -11,11 +11,7 @@ import {
   Fingerprint, Hash, RotateCcw, Lock,
 } from 'lucide-react';
 import { Rnd }       from 'react-rnd';
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfjsWorker   from 'pdfjs-dist/build/pdf.worker.entry';
-import { buildProxyUrl } from '@/api/apiClient';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+import { loadPdfDocument } from '@/utils/loadPdfDocument';
 
 const cn = (...c) => c.filter(Boolean).join(' ');
 
@@ -200,6 +196,7 @@ FieldOverlay.displayName = 'FieldOverlay';
 // ═══════════════════════════════════════════════════════════════
 export default function PdfViewer({
   fileUrl,
+  localFile          = null,
   fields             = [],
   onFieldsChange,
   currentPage        = 1,
@@ -223,9 +220,15 @@ export default function PdfViewer({
   const pdfDocRef     = useRef(null);
   const canvasSizeRef = useRef({ width: 0, height: 0 });
   const debounceRef   = useRef(null);
+  const lastWidthRef  = useRef(0);
+  const localFileKey  = useMemo(() => {
+    if (!localFile) return '';
+    return `${localFile.name}-${localFile.size}-${localFile.lastModified}`;
+  }, [localFile]);
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [loading,    setLoading]    = useState(true);
+  const [rendered,   setRendered]   = useState(false);
   const [error,      setError]      = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [zoom,       setZoom]       = useState(1);
@@ -241,20 +244,20 @@ export default function PdfViewer({
 
   // ── Load PDF ────────────────────────────────────────────────
   useEffect(() => {
-    if (!fileUrl) return;
+    const source = localFile || fileUrl;
+    if (!source) return;
     let cancelled = false;
     setLoading(true);
+    setRendered(false);
     setError(null);
+    setCanvasSize({ width: 0, height: 0 });
+    canvasSizeRef.current = { width: 0, height: 0 };
     pdfDocRef.current = null;
+    lastWidthRef.current = 0;
 
     (async () => {
       try {
-        const url = buildProxyUrl(fileUrl);
-        const doc = await pdfjsLib.getDocument({
-          url,
-          withCredentials: false,
-          cMapPacked: true,
-        }).promise;
+        const doc = await loadPdfDocument(source, { timeoutMs: 45_000 });
 
         if (cancelled) return;
         pdfDocRef.current = doc;
@@ -272,26 +275,28 @@ export default function PdfViewer({
     })();
 
     return () => { cancelled = true; };
-  }, [fileUrl, loadKey, onTotalPagesChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileUrl, localFileKey, loadKey]);
 
   // ── Render page ─────────────────────────────────────────────
   const renderPage = useCallback(async () => {
     const doc       = pdfDocRef.current;
     const canvas    = canvasRef.current;
-    const container = wrapRef.current;
+    const container = containerRef.current;
     if (!doc || !canvas || !container) return;
+
+    const avail = container.clientWidth;
+    if (avail < 80) return;
 
     try { renderTaskRef.current?.cancel(); } catch (_) {}
 
     try {
       const page  = await doc.getPage(currentPage);
-      // ✅ mobile: use full container width
-      const avail = Math.max(container.clientWidth - 16, 280);
-      const base  = page.getViewport({ scale: 1 });
-      const fit   = avail / base.width;
-      const scale = fit * zoom;
-      const vp    = page.getViewport({ scale });
-      const dpr   = Math.min(window.devicePixelRatio || 1, 2);
+      const base    = page.getViewport({ scale: 1 });
+      const fit     = Math.max(avail - 8, 320) / base.width;
+      const scale   = fit * zoom;
+      const vp      = page.getViewport({ scale });
+      const dpr     = Math.min(window.devicePixelRatio || 1, 2);
 
       canvas.width        = vp.width  * dpr;
       canvas.height       = vp.height * dpr;
@@ -299,38 +304,65 @@ export default function PdfViewer({
       canvas.style.height = `${vp.height}px`;
 
       const ctx = canvas.getContext('2d', { alpha: false });
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, vp.width, vp.height);
 
       const size = { width: vp.width, height: vp.height };
+      const prev = canvasSizeRef.current;
       canvasSizeRef.current = size;
-      setCanvasSize({ ...size });
+      if (
+        Math.abs(prev.width  - size.width)  > 1 ||
+        Math.abs(prev.height - size.height) > 1
+      ) {
+        setCanvasSize(size);
+      }
 
-      renderTaskRef.current = page.render({
-        canvasContext: ctx,
-        viewport: vp,
-      });
+      renderTaskRef.current = page.render({ canvasContext: ctx, viewport: vp });
       await renderTaskRef.current.promise;
+      setRendered(true);
     } catch (err) {
       if (err?.name !== 'RenderingCancelledException')
         console.error('[PdfViewer render]', err);
     }
   }, [currentPage, zoom]);
 
+  // Render when doc is ready and container has width
   useEffect(() => {
-    if (!loading && !error) renderPage();
+    if (loading || error || !pdfDocRef.current) return;
+
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const w = containerRef.current?.clientWidth || 0;
+      if (w < 80) {
+        requestAnimationFrame(run);
+        return;
+      }
+      renderPage();
+    };
+    run();
+    return () => { cancelled = true; };
   }, [loading, error, renderPage]);
 
   useEffect(() => {
-    const el = wrapRef.current;
+    const el = containerRef.current;
     if (!el) return;
+
     const obs = new ResizeObserver(() => {
+      if (loading || error || !pdfDocRef.current) return;
+      const w = el.clientWidth;
+      if (Math.abs(w - lastWidthRef.current) < 8) return;
+      lastWidthRef.current = w;
       clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        if (!loading && !error) renderPage();
-      }, 100);
+      debounceRef.current = setTimeout(() => renderPage(), 250);
     });
+
     obs.observe(el);
-    return () => { obs.disconnect(); clearTimeout(debounceRef.current); };
+    return () => {
+      obs.disconnect();
+      clearTimeout(debounceRef.current);
+    };
   }, [loading, error, renderPage]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────
@@ -353,7 +385,7 @@ export default function PdfViewer({
   // ✅ FIXED: Field placement — supports BOTH mouse AND touch
   // ════════════════════════════════════════════════════════════
   const placeField = useCallback((clientX, clientY) => {
-    if (readOnly || !pendingFieldType || loading) return;
+    if (readOnly || !pendingFieldType || !rendered) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -388,7 +420,7 @@ export default function PdfViewer({
     onFieldSelect?.(newField.id);
     onFieldPlaced?.();
   }, [
-    readOnly, pendingFieldType, loading,
+    readOnly, pendingFieldType, rendered,
     currentPage, selectedPartyIndex,
     fontFamily, fontSize,
     onFieldsChange, onFieldPlaced, onFieldSelect,
@@ -396,20 +428,20 @@ export default function PdfViewer({
 
   // ✅ Mouse click handler
   const handleOverlayClick = useCallback((e) => {
-    if (readOnly || !pendingFieldType || loading) return;
+    if (readOnly || !pendingFieldType || !rendered) return;
     // ✅ allow click anywhere on overlay — removed strict target check
     placeField(e.clientX, e.clientY);
-  }, [readOnly, pendingFieldType, loading, placeField]);
+  }, [readOnly, pendingFieldType, rendered, placeField]);
 
   // ✅ Touch handler — NEW
   const handleOverlayTouch = useCallback((e) => {
-    if (readOnly || !pendingFieldType || loading) return;
+    if (readOnly || !pendingFieldType || !rendered) return;
     // Prevent scroll when placing field
     e.preventDefault();
     const touch = e.changedTouches[0];
     if (!touch) return;
     placeField(touch.clientX, touch.clientY);
-  }, [readOnly, pendingFieldType, loading, placeField]);
+  }, [readOnly, pendingFieldType, rendered, placeField]);
 
   // ── Field update / remove ───────────────────────────────────
   const updateField = useCallback((id, patch) => {
@@ -436,7 +468,7 @@ export default function PdfViewer({
   // ════════════════════════════════════════════════════════════
   return (
     <div ref={wrapRef}
-      className="flex-1 w-full flex flex-col
+      className="flex-1 w-full h-full min-h-0 flex flex-col
                  bg-slate-100 dark:bg-slate-950
                  overflow-hidden">
 
@@ -479,8 +511,7 @@ export default function PdfViewer({
                           rounded-xl bg-sky-50 dark:bg-sky-900/30
                           border border-sky-200 dark:border-sky-800
                           flex-1 min-w-0 justify-center">
-            <span className="w-1.5 h-1.5 rounded-full
-                             bg-sky-400 animate-pulse shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
             <span className="text-[10px] font-black text-sky-600
                              dark:text-sky-400 uppercase tracking-wide
                              truncate">
@@ -517,24 +548,14 @@ export default function PdfViewer({
 
       {/* ── Canvas area ─────────────────────────────────────── */}
       <div ref={containerRef}
-        className="flex-1 overflow-auto
-                   p-2 sm:p-4
+        className="flex-1 overflow-auto w-full
+                   p-3 sm:p-4
                    flex flex-col items-center
-                   min-h-0">
+                   min-h-[480px] relative">
 
-        {/* Loading */}
-        {loading && (
-          <div className="w-full flex flex-col items-center
-                          justify-center gap-3 py-16">
-            <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800
-                            rounded-2xl animate-pulse flex items-center
-                            justify-center">
-              <Loader2 size={24} className="text-slate-400 animate-spin" />
-            </div>
-            <p className="text-xs font-bold uppercase tracking-widest
-                          text-slate-400">
-              Loading PDF…
-            </p>
+        {loading && !error && !rendered && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Loader2 size={22} className="text-slate-300 animate-spin" />
           </div>
         )}
 
@@ -562,14 +583,18 @@ export default function PdfViewer({
         )}
 
         {/* PDF canvas + field overlays */}
-        {!loading && !error && (
-          <div className="relative bg-white shadow-2xl
-                          shadow-slate-400/20 dark:shadow-slate-900/60
-                          rounded-sm mb-4"
+        {!error && (
+          <div
+            className="relative bg-white w-full max-w-5xl mx-auto
+                       shadow-sm rounded-sm mb-4"
             style={{
-              width:  canvasSize.width  || 'auto',
-              height: canvasSize.height || 'auto',
-            }}>
+              width:     canvasSize.width  ? `${canvasSize.width}px`  : '100%',
+              maxWidth:  '100%',
+              minHeight: canvasSize.height ? undefined : 480,
+              height:    canvasSize.height || undefined,
+              opacity:   rendered ? 1 : 0,
+            }}
+          >
 
             {/* Canvas */}
             <canvas ref={canvasRef}
@@ -591,7 +616,7 @@ export default function PdfViewer({
               onTouchEnd={handleOverlayTouch}
             >
               {/* Field overlays */}
-              {canvasSize.width > 0 && currentPageFields.map(field => (
+              {rendered && canvasSize.width > 0 && currentPageFields.map(field => (
                 <FieldOverlay
                   key={field.id}
                   field={field}
@@ -621,7 +646,7 @@ export default function PdfViewer({
         )}
 
         {/* Page dots */}
-        {totalPages > 1 && totalPages <= 20 && !loading && (
+        {totalPages > 1 && totalPages <= 20 && rendered && (
           <div className="flex items-center gap-1.5 mb-4">
             {Array.from({ length: totalPages }).map((_, i) => (
               <button key={i} type="button"

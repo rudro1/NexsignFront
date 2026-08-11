@@ -211,8 +211,9 @@ api.interceptors.response.use(
       inflightMap.delete(key);
 
       const isPublicPage =
-        window.location.pathname.includes('/login')    ||
-        window.location.pathname.includes('/sign/')    ||
+        window.location.pathname.includes('/login')         ||
+        window.location.pathname.includes('/sign/')         ||
+        window.location.pathname.includes('/template-sign/') ||
         window.location.pathname.includes('/register');
 
       if (typeof window !== 'undefined' && !isPublicPage) {
@@ -340,6 +341,9 @@ export const documentApi = {
       return res;
     }),
 
+  previewSigningEmail: (data) =>
+    api.post('/documents/email-preview', data),
+
   // delete হলে cache clear
   delete: (id) =>
     api.delete(`/documents/${id}`).then(res => {
@@ -348,17 +352,47 @@ export const documentApi = {
     }),
 
   // Public — no auth
-  validateToken: (token) =>
-    api.get(
-      `/documents/sign/validate/${token}`,
-      { noCache: true },
-    ),
+  validateToken: (token, options = {}) =>
+    publicGet(`/documents/sign/validate/${token}`, options),
 
   submitSignature: (data) =>
     api.post('/documents/sign/submit', data),
 
   getPdfProxy: (token) =>
-    `${BASE}/documents/sign/${token}/pdf`,
+    publicApiUrl(`/documents/sign/${token}/pdf`),
+
+  /** Authenticated owner PDF preview (bypasses Cloudinary 401) */
+  getDocumentPdfUrl: (docId, signed = false) => {
+    const q = signed ? '?signed=1' : '';
+    return `${BASE}/documents/${docId}/pdf${q}`;
+  },
+
+  fetchDocumentPdfBlob: async (docId, signed = false) => {
+    const token = localStorage.getItem('token');
+    const url = `${BASE}/documents/${docId}/pdf${signed ? '?signed=1' : ''}`;
+    const res = await fetch(url, {
+      credentials: 'omit',
+      headers: {
+        Accept: 'application/pdf',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      let message = `PDF load failed (${res.status})`;
+      try {
+        const err = await res.json();
+        message = err.message || message;
+      } catch {
+        try {
+          message = (await res.text()) || message;
+        } catch { /* ignore */ }
+      }
+      throw { message, status: res.status };
+    }
+
+    return { data: await res.blob(), status: res.status };
+  },
 };
 
 // ── Templates ─────────────────────────────────────────────────
@@ -387,6 +421,12 @@ export const templateApi = {
   getSessions: (id) =>
     api.get(`/templates/${id}/sessions`, { noCache: true }),
 
+  /** Public signing session (template email links) */
+  getSession: async (token) => {
+    const res = await api.get(`/templates/sign/validate/${token}`, { noCache: true });
+    return res.data;
+  },
+
   validateEmployeeToken: (token) =>
     api.get(
       `/templates/sign/validate/${token}`,
@@ -396,15 +436,75 @@ export const templateApi = {
   submitEmployeeSignature: (token, data) =>
     api.post(`/templates/sign/submit/${token}`, data),
 
+  /** Alias used by TemplateSigner */
+  employeeSign: (token, data) =>
+    api.post(`/templates/sign/submit/${token}`, data),
+
   declineEmployee: (token, data) =>
     api.post(`/templates/sign/decline/${token}`, data),
+
+  /** Alias used by TemplateSigner */
+  employeeDecline: (token, reason) =>
+    api.post(`/templates/sign/decline/${token}`, {
+      reason: typeof reason === 'string' ? reason : reason?.reason || '',
+    }),
 
   resendEmail: (templateId, sessionId) =>
     api.post(`/templates/${templateId}/sessions/${sessionId}/resend`),
 
-  // ✅ NEW: PDF proxy URL — iframe X-Frame-Options bypass করে
+  resendSignedCopy: (templateId, sessionId) =>
+    api.post(`/templates/${templateId}/sessions/${sessionId}/resend-signed`),
+
+  getSessionSignedPdfUrl: (templateId, sessionId) =>
+    `${BASE}/templates/${templateId}/sessions/${sessionId}/pdf`,
+
+  fetchSessionSignedPdfBlob: async (templateId, sessionId) => {
+    const token = localStorage.getItem('token');
+    const url = `${BASE}/templates/${templateId}/sessions/${sessionId}/pdf`;
+    const res = await fetch(url, {
+      credentials: 'omit',
+      headers: {
+        Accept: 'application/pdf',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      let message = `PDF load failed (${res.status})`;
+      try {
+        const err = await res.json();
+        message = err.message || message;
+      } catch {
+        try { message = (await res.text()) || message; } catch { /* ignore */ }
+      }
+      throw { message, status: res.status };
+    }
+
+    return { data: await res.blob(), status: res.status };
+  },
+
   getPdfProxyUrl: (token) =>
-    `${BASE}/templates/sign/${token}/pdf`,
+    publicApiUrl(`/templates/sign/${token}/pdf`),
+
+  /** Preview employee signing email HTML */
+  previewEmployeeEmail: (data, templateId = null) =>
+    templateId
+      ? api.post(`/templates/${templateId}/email-preview`, data)
+      : api.post('/templates/email-preview', data),
+
+  /** Resend all failed employee emails for a template */
+  resendFailedEmails: (id) =>
+    api.post(`/templates/${id}/resend-failed`),
+
+  /** Reuse master template — new employee batch + optional approver chain */
+  reuseTemplate: (id, data) =>
+    api.post(`/templates/${id}/reuse`, data),
+
+  listCampaigns: (id) =>
+    api.get(`/templates/${id}/campaigns`),
+
+  getAudit: (id) =>
+    api.get(`/templates/${id}/audit`, { noCache: true }),
 };
 
 // ── Admin ─────────────────────────────────────────────────────
@@ -467,15 +567,45 @@ export const fieldApi = {
     api.post(`/documents/${docId}/fields/reorder`, { order }),
 };
 
-// ═══════════════════════════════════════════════════════════════
-// PROXY URL BUILDER
-// blob: / data: → সরাসরি return
-// Cloudinary URL → সরাসরি use (CORS allow করা আছে)
-// ═══════════════════════════════════════════════════════════════
-export function buildProxyUrl(cloudinaryUrl) {
-  if (!cloudinaryUrl) return '';
+// ── PROXY URL BUILDER
+// Always use the same BASE as axios so validate + PDF proxy hit the same backend.
+function publicApiUrl(path) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${BASE}${p}`;
+}
 
-  // Local blob বা base64 → সরাসরি use
+/** Public GET without cookies — avoids CORS issues on signing pages */
+export async function publicGet(path, options = {}) {
+  const url = publicApiUrl(path);
+  const res = await fetch(url, {
+    method:      'GET',
+    credentials: 'omit',
+    headers:     { Accept: 'application/json', ...(options.headers || {}) },
+    signal:      options.signal,
+  });
+
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
+  if (!res.ok) {
+    throw {
+      message:  data?.message || `Server error (${res.status})`,
+      status:   res.status,
+      response: { status: res.status, data },
+    };
+  }
+
+  return { data, status: res.status };
+}
+
+export function buildProxyUrl(cloudinaryUrl, docId = null) {
+  if (!cloudinaryUrl) return '';
+  if (docId) return `${BASE}/documents/${docId}/pdf`;
+
   if (
     cloudinaryUrl.startsWith('blob:') ||
     cloudinaryUrl.startsWith('data:')
@@ -483,8 +613,11 @@ export function buildProxyUrl(cloudinaryUrl) {
     return cloudinaryUrl;
   }
 
-  // Cloudinary URL → সরাসরি return
-  // (server side CORS allow করা আছে)
+  // Never load Cloudinary raw PDFs directly in the browser (often HTTP 401)
+  if (cloudinaryUrl.includes('res.cloudinary.com') && cloudinaryUrl.includes('/raw/')) {
+    return '';
+  }
+
   return cloudinaryUrl;
 }
 

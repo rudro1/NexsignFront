@@ -23,10 +23,12 @@ import {
   ImagePlus, ChevronRight, CheckCircle2, Users,
   Trash2, PenTool, Plus, RotateCcw, AlertCircle,
   Building2, Crown, UserCheck, Eye,
-  FileSpreadsheet, X, Mail,
+  FileSpreadsheet, X, Mail, GitBranch,
 } from 'lucide-react';
 import FieldToolbar from '@/components/editor/FieldToolbar';
 import PdfViewer    from '@/components/editor/PdfViewer';
+import EmailPreviewModal from '@/components/email/EmailPreviewModal';
+import CustomEmailEditor from '@/components/email/CustomEmailEditor';
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -160,7 +162,13 @@ export default function NewTemplate() {
   const [companyLogoFile,    setCompanyLogoFile]    = useState(null);
   const [companyLogoPreview, setCompanyLogoPreview] = useState('');
   const [companyLogoUrl,     setCompanyLogoUrl]     = useState('');
+  const [emailHeaderColor,   setEmailHeaderColor]   = useState('#0f172a');
+  const [uploadedPdfMeta,    setUploadedPdfMeta]    = useState(null);
   const [companyName,        setCompanyName]        = useState('');
+  const [message,            setMessage]            = useState('');
+  const [useCustomEmailBody, setUseCustomEmailBody] = useState(false);
+  const [customEmailBody,    setCustomEmailBody]    = useState('');
+  const [customEmailSubject, setCustomEmailSubject] = useState('');
 
   // Boss
   const [bossName,        setBossName]        = useState(user?.full_name  || '');
@@ -179,6 +187,9 @@ export default function NewTemplate() {
   const [ccForm,  setCcForm]  = useState({ name: '', email: '', designation: '' });
   const [ccError, setCcError] = useState('');
 
+  const [approvers, setApprovers] = useState([]);
+  const [apprForm,  setApprForm]  = useState({ name: '', email: '', designation: '' });
+
   // Editor
   const [currentPage,        setCurrentPage]        = useState(1);
   const [totalPages,         setTotalPages]          = useState(1);
@@ -187,6 +198,13 @@ export default function NewTemplate() {
   const [processing,         setProcessing]         = useState(false);
   const [selectedFieldId,    setSelectedFieldId]    = useState(null);
   const [mobilePanelView,    setMobilePanelView]    = useState('sidebar');
+
+  // Email preview
+  const [previewOpen,       setPreviewOpen]       = useState(false);
+  const [previewLoading,    setPreviewLoading]    = useState(false);
+  const [previewSubject,    setPreviewSubject]    = useState('');
+  const [previewHtml,       setPreviewHtml]       = useState('');
+  const [previewRecipient,  setPreviewRecipient]  = useState('');
 
   const fileUrlRef     = useRef(fileUrl);
   const logoPreviewRef = useRef(companyLogoPreview);
@@ -208,8 +226,42 @@ export default function NewTemplate() {
     [fields, selectedFieldId],
   );
 
+  const openEmailPreview = useCallback(async (employee) => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewRecipient(
+      employee ? `${employee.name} <${employee.email}>` : 'Sample employee',
+    );
+    try {
+      const res = await templateApi.previewEmployeeEmail({
+        documentTitle:   title.trim() || 'Document Title',
+        companyName:     companyName.trim(),
+        companyLogo:     companyLogoUrl,
+        emailHeaderColor,
+        message:         useCustomEmailBody ? '' : message.trim(),
+        useCustomEmailBody,
+        customEmailBody,
+        customEmailSubject,
+        bossName:        bossName.trim(),
+        bossDesignation: bossDesignation.trim(),
+        employee: employee || {
+          name: 'Employee Name', email: 'employee@company.com', designation: '',
+        },
+      });
+      setPreviewSubject(res.data?.subject || '');
+      setPreviewHtml(res.data?.html || '');
+    } catch (err) {
+      toast.error(err?.message || 'Could not load email preview.');
+      setPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [title, companyName, companyLogoUrl, emailHeaderColor, message,
+      useCustomEmailBody, customEmailBody, customEmailSubject,
+      bossName, bossDesignation]);
+
   // File select
-  const handleFileSelect = useCallback((e) => {
+  const handleFileSelect = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== 'application/pdf') { toast.error('Please upload a valid PDF file.'); return; }
@@ -217,6 +269,7 @@ export default function NewTemplate() {
     revokeBlob(fileUrlRef.current);
     const url = URL.createObjectURL(file);
     setRawFile(file);
+    setUploadedPdfMeta(null);
     setTitle(prev => prev || file.name.replace(/\.pdf$/i, ''));
     setFileUrl(url);
     setFileReady(true);
@@ -225,7 +278,7 @@ export default function NewTemplate() {
     e.target.value = '';
   }, []);
 
-  const handleLogoSelect = useCallback((e) => {
+  const handleLogoSelect = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     revokeBlob(logoPreviewRef.current);
@@ -233,6 +286,14 @@ export default function NewTemplate() {
     setCompanyLogoPreview(URL.createObjectURL(file));
     setCompanyLogoUrl('');
     e.target.value = '';
+    try {
+      const fd = new FormData();
+      fd.append('logo', file);
+      const res = await api.post('/documents/upload-logo', fd);
+      if (res.data?.logoUrl) setCompanyLogoUrl(res.data.logoUrl);
+    } catch (err) {
+      console.error('[template logo upload]', err);
+    }
   }, []);
 
   // Employee helpers
@@ -273,6 +334,28 @@ export default function NewTemplate() {
 
   const removeCC = useCallback((i) => {
     setCcList(prev => prev.filter((_, idx) => idx !== i));
+  }, []);
+
+  const addApprover = useCallback(() => {
+    const email = apprForm.email.trim().toLowerCase();
+    if (!apprForm.name.trim() || !email) {
+      toast.error('Approver name and email required.');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      toast.error('Valid approver email required.');
+      return;
+    }
+    setApprovers(prev => [...prev, {
+      name: apprForm.name.trim(),
+      email,
+      designation: apprForm.designation.trim(),
+    }]);
+    setApprForm({ name: '', email: '', designation: '' });
+  }, [apprForm]);
+
+  const removeApprover = useCallback((i) => {
+    setApprovers(prev => prev.filter((_, idx) => idx !== i));
   }, []);
 
   // CSV parse
@@ -377,24 +460,24 @@ export default function NewTemplate() {
 
     setProcessing(true);
     try {
-      // Step A: Upload PDF
-      toast.loading('Uploading PDF...', { id: 'upload' });
-      const docUpload = await uploadPdf();
-      toast.dismiss('upload');
+      let uploadedFileUrl      = uploadedPdfMeta?.fileUrl || '';
+      let uploadedFilePublicId = uploadedPdfMeta?.filePublicId || '';
+      let uploadedFileName     = uploadedPdfMeta?.fileName || rawFile.name;
+      let uploadedFileSize     = uploadedPdfMeta?.fileSize || rawFile.size;
 
-      const uploadedFileUrl      = docUpload?.fileUrl  || '';
-      const uploadedFilePublicId = docUpload?.fileId   || '';
-      const uploadedFileName     = docUpload?.fileName || rawFile.name;
-      const uploadedFileSize     = docUpload?.fileSize || rawFile.size;
+      if (!uploadedFileUrl) {
+        const docUpload = await uploadPdf();
+        uploadedFileUrl      = docUpload?.fileUrl  || '';
+        uploadedFilePublicId = docUpload?.fileId   || '';
+        uploadedFileName     = docUpload?.fileName || rawFile.name;
+        uploadedFileSize     = docUpload?.fileSize || rawFile.size;
+      }
 
       if (!uploadedFileUrl) throw new Error('PDF upload failed. Please try again.');
 
-      // Step B: Upload logo (optional)
-      let logoUrl = '';
-      if (companyLogoFile) {
-        toast.loading('Uploading logo...', { id: 'logo' });
+      let logoUrl = companyLogoUrl || '';
+      if (companyLogoFile && !logoUrl) {
         logoUrl = await uploadLogo();
-        toast.dismiss('logo');
       }
 
       // Step C: Process fields — add assignedTo from partyIndex
@@ -445,6 +528,8 @@ const payload = {
   recipients,
   ccList,
 
+  approvers,
+
   // ✅ এটা ADD করুন
   boss: {
     name:        bossName.trim(),
@@ -454,13 +539,17 @@ const payload = {
 
   companyName:  companyName.trim(),
   companyLogo:  logoUrl,
-  message:      '',
+  emailHeaderColor: emailHeaderColor || '#0f172a',
+  message:      useCustomEmailBody ? '' : message.trim(),
   totalPages,
   signingConfig: {
     bossSignsFirst: true,
     expiryDays:     30,
     allowDecline:   true,
     reminderDays:   3,
+    useCustomEmailBody,
+    customEmailBody:    useCustomEmailBody ? customEmailBody : '',
+    customEmailSubject: useCustomEmailBody ? customEmailSubject : '',
   },
 };
       const res = await templateApi.create(payload);
@@ -483,9 +572,10 @@ const payload = {
   }, [
   rawFile, title, fields,
   bossName, bossEmail, bossDesignation, // ← এটা যোগ করুন
-  employees, ccList,
-  companyName, companyLogoFile, companyLogoUrl,
-  totalPages, uploadPdf, uploadLogo, navigate,
+  employees, ccList, approvers,
+  companyName, companyLogoFile, companyLogoUrl, emailHeaderColor, message,
+  useCustomEmailBody, customEmailBody, customEmailSubject,
+  uploadedPdfMeta, totalPages, uploadPdf, uploadLogo, navigate,
 ]);
 
   const currentMeta = STEPS[step - 1];
@@ -620,8 +710,16 @@ const payload = {
                       <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
                         {title || 'template'}.pdf
                       </p>
+                      <p className="text-xs text-slate-500 mt-0.5">Preview ready</p>
                       <button type="button"
-                        onClick={() => { revokeBlob(fileUrl); setFileReady(false); setFileUrl(''); setRawFile(null); setFields([]); }}
+                        onClick={() => {
+                          revokeBlob(fileUrl);
+                          setFileReady(false);
+                          setFileUrl('');
+                          setRawFile(null);
+                          setUploadedPdfMeta(null);
+                          setFields([]);
+                        }}
                         className="text-xs text-[#28ABDF] hover:underline font-medium mt-0.5">
                         Replace
                       </button>
@@ -680,6 +778,65 @@ const payload = {
                       </div>
                     </div>
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Email Header Color
+                    </Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={emailHeaderColor}
+                        onChange={e => setEmailHeaderColor(e.target.value)}
+                        className="h-10 w-14 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer bg-white"
+                      />
+                      <Input
+                        value={emailHeaderColor}
+                        onChange={e => setEmailHeaderColor(e.target.value)}
+                        placeholder="#0f172a"
+                        className="h-10 rounded-xl border-slate-200 dark:border-slate-700 text-sm flex-1"
+                      />
+                    </div>
+                  </div>
+
+                  <CustomEmailEditor
+                    variant="template"
+                    useCustom={useCustomEmailBody}
+                    onUseCustomChange={setUseCustomEmailBody}
+                    subject={customEmailSubject}
+                    onSubjectChange={setCustomEmailSubject}
+                    body={customEmailBody}
+                    onBodyChange={setCustomEmailBody}
+                    previewFn={templateApi.previewEmployeeEmail}
+                    previewContext={{
+                      documentTitle: title.trim() || 'Document Title',
+                      companyName:     companyName.trim(),
+                      companyLogo:     companyLogoUrl,
+                      emailHeaderColor,
+                      bossName:        bossName.trim(),
+                      bossDesignation: bossDesignation.trim(),
+                      employee: {
+                        name: 'Employee Name', email: 'employee@company.com', designation: '',
+                      },
+                    }}
+                  />
+
+                  {!useCustomEmailBody && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Optional note (added to default email)
+                      </Label>
+                      <textarea
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        rows={3}
+                        placeholder="Optional note included in every employee email…"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700
+                                   bg-white dark:bg-slate-900 text-sm px-3 py-2 resize-none
+                                   focus:outline-none focus:ring-2 focus:ring-[#28ABDF]/30"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -723,10 +880,11 @@ const payload = {
                 <div className="flex items-center justify-between p-3 rounded-xl
                                 bg-[#28ABDF]/10 border border-[#28ABDF]/30">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-[#28ABDF] animate-ping" />
+                    <div className="w-2 h-2 rounded-full bg-[#28ABDF]" />
                     <p className="text-xs font-semibold text-[#28ABDF]">
                       Click PDF to place <span className="font-bold capitalize">{pendingFieldType}</span>{' '}
                       for <span className="font-bold">{TEMPLATE_PARTIES[selectedPartyIndex]?.name}</span>
+                      {' '}(click again for more)
                     </p>
                   </div>
                   <button type="button" onClick={() => setPendingFieldType(null)}
@@ -749,6 +907,26 @@ const payload = {
                       className="text-xs text-red-400 hover:text-red-500 font-medium flex items-center gap-1">
                       <Trash2 className="w-3 h-3" /> Remove
                     </button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {TEMPLATE_PARTIES.map((p, i) => (
+                      <button
+                        key={p.assignedTo}
+                        type="button"
+                        onClick={() => setFields(prev => prev.map(f =>
+                          f.id === selectedField.id ? { ...f, partyIndex: i } : f,
+                        ))}
+                        className={`px-2 py-1 rounded-md text-[10px] font-semibold border ${
+                          selectedField.partyIndex === i
+                            ? 'text-white border-transparent'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                        }`}
+                        style={selectedField.partyIndex === i ? { backgroundColor: p.color } : {}}
+                      >
+                        {p.assignedTo}
+                      </button>
+                    ))}
                   </div>
 
                   {selectedField.type === 'text' && (
@@ -980,6 +1158,41 @@ const payload = {
           {/* ── STEP 5: CC Recipients ── */}
           {step === 5 && (
             <div className="p-5 sm:p-6 space-y-5">
+              <SectionHeader icon={GitBranch} iconBg="bg-violet-50 dark:bg-violet-900/30"
+                iconColor="text-violet-500" title="Approval Chain"
+                subtitle="Optional — approvers sign in order before employees get mail" />
+
+              <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800">
+                <p className="text-xs text-violet-700 dark:text-violet-400 leading-relaxed">
+                  e.g. CEO → Head of HR → HR. Each approves in order; then all employees receive signing links.
+                  Skip if not needed.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 space-y-3 border border-slate-100 dark:border-slate-700">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={apprForm.name} placeholder="Approver name"
+                    onChange={e => setApprForm(p => ({ ...p, name: e.target.value }))}
+                    className="h-9 rounded-xl text-xs" />
+                  <Input value={apprForm.email} type="email" placeholder="Approver email"
+                    onChange={e => setApprForm(p => ({ ...p, email: e.target.value }))}
+                    className="h-9 rounded-xl text-xs" />
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addApprover}
+                  className="w-full h-9 rounded-xl text-xs gap-1">
+                  <Plus className="w-3 h-3" /> Add approver
+                </Button>
+                {approvers.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-xs">
+                    <span className="font-bold text-slate-400 w-4">{i + 1}.</span>
+                    <span className="flex-1 truncate">{a.name} · {a.email}</span>
+                    <button type="button" onClick={() => removeApprover(i)}>
+                      <X className="w-3.5 h-3.5 text-slate-400 hover:text-red-500" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
               <SectionHeader icon={Mail} iconBg="bg-blue-50 dark:bg-blue-900/30"
                 iconColor="text-[#28ABDF]" title="CC Recipients"
                 subtitle="These people receive a copy but don't sign" />
@@ -1093,10 +1306,58 @@ const payload = {
                   <ReviewRow label="Employees"
                     value={`${employees.length} added`}
                     valueClass="text-emerald-600" />
+                  <ReviewRow label="Approvers"
+                    value={approvers.length > 0 ? `${approvers.length} in chain` : 'None (optional)'}
+                    valueClass={approvers.length > 0 ? 'text-violet-600' : 'text-slate-400'} />
                   <ReviewRow label="CC Recipients"
                     value={ccList.length > 0 ? `${ccList.length} added` : 'None'}
                     valueClass={ccList.length > 0 ? 'text-sky-600' : 'text-slate-400'} />
                   <ReviewRow label="Expiry" value="30 days per link" />
+                  {useCustomEmailBody ? (
+                    <ReviewRow label="Email" value="Custom email body" />
+                  ) : message.trim() ? (
+                    <ReviewRow label="Email Message" value={message.trim()} />
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Employee email previews */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-50 dark:border-slate-700 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Employee Email Preview
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openEmailPreview(null)}
+                    className="text-[11px] font-semibold text-[#28ABDF] hover:underline"
+                  >
+                    Sample preview
+                  </button>
+                </div>
+                <div className="p-3 space-y-1.5 max-h-48 overflow-y-auto">
+                  {employees.length ? employees.map((emp, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl
+                                            bg-slate-50 dark:bg-slate-900/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">
+                          {emp.name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate">{emp.email}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEmailPreview(emp)}
+                        className="h-7 px-2.5 rounded-lg text-[10px] gap-1 shrink-0"
+                      >
+                        <Eye className="w-3 h-3" /> Preview
+                      </Button>
+                    </div>
+                  )) : (
+                    <p className="text-xs text-slate-400 text-center py-4">Add employees to preview emails</p>
+                  )}
                 </div>
               </div>
 
@@ -1105,7 +1366,9 @@ const payload = {
                   <AlertCircle className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
                   <p className="text-xs text-sky-700 dark:text-sky-400 leading-relaxed">
                     After creation, go to <strong>Template Detail</strong> to sign as Boss.
-                    Once you sign, all <strong>{employees.length} employees</strong> receive their copy simultaneously.
+                    {approvers.length > 0
+                      ? <> Then <strong>{approvers.length} approver(s)</strong> approve in order before employees get mail.</>
+                      : <> Once you sign, all <strong>{employees.length} employees</strong> receive their copy simultaneously.</>}
                     {ccList.length > 0 && ` ${ccList.length} CC recipient${ccList.length !== 1 ? 's' : ''} will receive the final signed document.`}
                   </p>
                 </div>
@@ -1129,11 +1392,10 @@ const payload = {
           ${step === 2 && mobilePanelView === 'sidebar' ? 'hidden lg:flex' : 'flex'}
         `}>
           {fileReady ? (
-            <div className="flex-1 overflow-auto flex justify-center items-start p-4 lg:p-8">
-              <div className="shadow-2xl shadow-slate-300/40 dark:shadow-black/60 rounded-sm overflow-hidden
-                              ring-1 ring-slate-200/80 dark:ring-slate-700/50">
+            <div className="flex-1 overflow-hidden flex flex-col w-full min-h-0">
                 <PdfViewer
                   fileUrl={fileUrl}
+                  localFile={rawFile}
                   fields={fields}
                   onFieldsChange={setFields}
                   currentPage={currentPage}
@@ -1143,14 +1405,12 @@ const payload = {
                   pendingFieldType={pendingFieldType}
                   parties={TEMPLATE_PARTIES}
                   onFieldPlaced={() => {
-                    setPendingFieldType(null);
-                    setMobilePanelView('sidebar');
+                    if (window.innerWidth < 1024) setMobilePanelView('sidebar');
                   }}
                   selectedFieldId={selectedFieldId}
                   onFieldSelect={setSelectedFieldId}
                   readOnly={step !== 2}
                 />
-              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
@@ -1168,6 +1428,20 @@ const payload = {
         </section>
 
       </main>
+
+      <EmailPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        subject={previewSubject}
+        html={previewHtml}
+        loading={previewLoading}
+        recipientLabel={previewRecipient}
+        onEdit={() => {
+          setPreviewOpen(false);
+          goToStep(1);
+        }}
+        editLabel="Edit email content"
+      />
     </div>
   );
 }

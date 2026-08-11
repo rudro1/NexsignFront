@@ -2726,7 +2726,6 @@ import React, {
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import * as pdfjsLib from 'pdfjs-dist';
 import {
   Shield, CheckCircle2, XCircle, Clock, AlertTriangle,
   Loader2, ChevronLeft, ChevronRight,
@@ -2736,9 +2735,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { templateApi } from '@/api/apiClient';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import { loadPdfDocument } from '@/utils/loadPdfDocument';
+import { getBrowserGPS, getClientTimezone } from '@/lib/signingGeo';
 
 const cn = (...c) => c.filter(Boolean).join(' ');
 
@@ -2776,24 +2774,7 @@ async function collectAuditMeta() {
     postalCode: '', latitude: '', longitude: '',
   };
 
-  // Fetch IP/geo (fail silently — don't block signing)
-  try {
-    const res  = await Promise.race([
-      fetch('https://ipapi.co/json/'),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
-    ]);
-    if (res.ok) {
-      const geo = await res.json();
-      meta.ip         = geo.ip         || '';
-      meta.city       = geo.city       || '';
-      meta.region     = geo.region     || '';
-      meta.country    = geo.country_name || '';
-      meta.postalCode = geo.postal     || '';
-      meta.latitude   = String(geo.latitude  || '');
-      meta.longitude  = String(geo.longitude || '');
-    }
-  } catch (_) { /* geo lookup failed — non-blocking */ }
-
+  // Geo is captured server-side on validate/submit — no client-side ipapi call (CORS blocked)
   return meta;
 }
 
@@ -3011,6 +2992,7 @@ function PdfRenderer({
   const renderIdRef  = useRef(0);
   const debounceRef  = useRef(null);
   const retryTimer   = useRef(null);
+  const mountedRef   = useRef(true);
 
   const [pdfState,   setPdfState]   = useState('idle');
   const [retryCount, setRetryCount] = useState(0);
@@ -3026,47 +3008,76 @@ function PdfRenderer({
     [fields, currentPage],
   );
 
+  const destroyPdf = useCallback(() => {
+    if (renderRef.current) {
+      try { renderRef.current.cancel(); } catch (_) {}
+      renderRef.current = null;
+    }
+    if (pdfDocRef.current) {
+      try { pdfDocRef.current.destroy(); } catch (_) {}
+      pdfDocRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      destroyPdf();
+      clearInterval(retryTimer.current);
+      clearTimeout(debounceRef.current);
+    };
+  }, [destroyPdf]);
+
   // Load PDF
   useEffect(() => {
     if (!pdfUrl) return;
     let cancelled = false;
 
     const load = async () => {
-      setPdfState('loading');
-      setLoadPct(0);
-      pdfDocRef.current = null;
+      destroyPdf();
+      if (mountedRef.current) {
+        setPdfState('loading');
+        setLoadPct(0);
+        setPageInfo({ cssW: 0, cssH: 0, nativeW: 0, nativeH: 0 });
+      }
 
       let fakePct = 0;
       const fakeTimer = setInterval(() => {
         fakePct = Math.min(fakePct + Math.random() * 12, 80);
-        if (!cancelled) setLoadPct(Math.round(fakePct));
+        if (!cancelled && mountedRef.current) setLoadPct(Math.round(fakePct));
       }, 350);
 
       try {
-        const task = pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false, rangeChunkSize: 65536 });
-        task.onProgress = ({ loaded, total }) => {
-          if (total > 0 && !cancelled) setLoadPct(Math.round((loaded / total) * 90));
-        };
-
-        const doc = await Promise.race([
-          task.promise,
-          new Promise((_, rej) => setTimeout(() => rej(new Error('PDF_TIMEOUT')), 35_000)),
-        ]);
+        const doc = await loadPdfDocument(pdfUrl, {
+          onProgress: ({ loaded, total }) => {
+            if (total > 0 && !cancelled && mountedRef.current) {
+              setLoadPct(Math.round((loaded / total) * 90));
+            }
+          },
+        });
 
         clearInterval(fakeTimer);
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) {
+          try { doc.destroy(); } catch (_) {}
+          return;
+        }
 
         pdfDocRef.current = doc;
         onTotalPages?.(doc.numPages);
         setLoadPct(100);
         await new Promise(r => setTimeout(r, 100));
-        if (!cancelled) {
-          setPdfState('ready');
-          setTimeout(() => renderPage(doc, currentPage, scale), 0);
-        }
+        if (cancelled || !mountedRef.current) return;
+
+        setPdfState('ready');
+        setTimeout(() => {
+          if (!cancelled && mountedRef.current) {
+            renderPage(doc, currentPage, scale);
+          }
+        }, 0);
       } catch (e) {
         clearInterval(fakeTimer);
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) return;
         console.error('[PDF load]', e?.message);
         setPdfState('error');
         if (retryCount < MAX_RETRIES) {
@@ -3075,10 +3086,10 @@ function PdfRenderer({
           setRetryIn(cnt);
           retryTimer.current = setInterval(() => {
             cnt--;
-            setRetryIn(cnt);
+            if (mountedRef.current) setRetryIn(cnt);
             if (cnt <= 0) {
               clearInterval(retryTimer.current);
-              if (!cancelled) setRetryCount(c => c + 1);
+              if (!cancelled && mountedRef.current) setRetryCount(c => c + 1);
             }
           }, 1000);
         }
@@ -3086,15 +3097,19 @@ function PdfRenderer({
     };
 
     load();
-    return () => { cancelled = true; clearInterval(retryTimer.current); };
+    return () => {
+      cancelled = true;
+      destroyPdf();
+      clearInterval(retryTimer.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfUrl, retryCount]);
+  }, [pdfUrl, retryCount, destroyPdf]);
 
   const renderPage = useCallback(async (docArg, page, sc) => {
     const doc    = docArg || pdfDocRef.current;
     const canvas = canvasRef.current;
     const wrap   = containerRef.current;
-    if (!doc || !canvas || !wrap) return;
+    if (!doc || !canvas || !wrap || !mountedRef.current) return;
 
     const myId = ++renderIdRef.current;
     if (renderRef.current) {
@@ -3102,11 +3117,11 @@ function PdfRenderer({
       renderRef.current = null;
     }
     await new Promise(r => setTimeout(r, 10));
-    if (myId !== renderIdRef.current) return;
+    if (myId !== renderIdRef.current || !mountedRef.current) return;
 
     try {
       const pg      = await doc.getPage(page);
-      if (myId !== renderIdRef.current) return;
+      if (myId !== renderIdRef.current || !mountedRef.current) return;
 
       const avail   = Math.max(wrap.clientWidth - 32, 300);
       const baseVP  = pg.getViewport({ scale: 1 });
@@ -3114,13 +3129,14 @@ function PdfRenderer({
       const vp      = pg.getViewport({ scale: fit * sc });
       const dpr     = Math.min(window.devicePixelRatio || 1, 2);
 
-      // Set page info BEFORE rendering (fields appear immediately at right position)
-      setPageInfo({
-        cssW:    vp.width,
-        cssH:    vp.height,
-        nativeW: baseVP.width,
-        nativeH: baseVP.height,
-      });
+      if (mountedRef.current) {
+        setPageInfo({
+          cssW:    vp.width,
+          cssH:    vp.height,
+          nativeW: baseVP.width,
+          nativeH: baseVP.height,
+        });
+      }
 
       canvas.width  = vp.width  * dpr;
       canvas.height = vp.height * dpr;
@@ -3128,9 +3144,10 @@ function PdfRenderer({
       canvas.style.height = `${vp.height}px`;
 
       const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
 
-      if (myId !== renderIdRef.current) return;
+      if (myId !== renderIdRef.current || !mountedRef.current) return;
 
       const task = pg.render({ canvasContext: ctx, viewport: vp });
       renderRef.current = task;
@@ -3224,10 +3241,38 @@ function PdfRenderer({
 
       {/* Canvas area */}
       <div className="flex-1 overflow-auto bg-slate-200 dark:bg-slate-950 p-3 sm:p-5">
-        <div ref={containerRef}>
-          {/* Loading skeleton */}
+        <div ref={containerRef} className="relative min-h-[320px]">
+          {/* PDF canvas — always mounted so PDF.js + React StrictMode stay in sync */}
+          <div
+            className={cn(
+              'relative mx-auto bg-white shadow-2xl shadow-black/20 rounded-sm',
+              'transition-opacity duration-300',
+              isReady ? 'opacity-100' : 'opacity-0 pointer-events-none',
+            )}
+            style={{ width: pageInfo.cssW || 'auto', height: pageInfo.cssH || 'auto' }}
+            aria-hidden={!isReady}
+          >
+            <canvas ref={canvasRef} className="block rounded-sm" />
+
+            <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+              {isReady && pageInfo.nativeW > 0 && pageFields.map(field => (
+                <FieldOverlay
+                  key={field.id}
+                  field={field}
+                  nativeWidth={pageInfo.nativeW}
+                  nativeHeight={pageInfo.nativeH}
+                  onSignatureClick={onSignatureClick}
+                  onTextChange={onTextChange}
+                  onDateChange={onDateChange}
+                  onCheckboxChange={onCheckboxChange}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Loading overlay */}
           {isLoading && (
-            <div className="flex flex-col items-center gap-6 py-8">
+            <div className="absolute inset-0 flex flex-col items-center gap-6 py-8 bg-slate-200 dark:bg-slate-950">
               <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-xl overflow-hidden">
                 <div className="p-8 space-y-4 animate-pulse" style={{ minHeight: 550 }}>
                   <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-lg w-2/3 mx-auto" />
@@ -3246,9 +3291,9 @@ function PdfRenderer({
             </div>
           )}
 
-          {/* Error */}
+          {/* Error overlay */}
           {isError && (
-            <div className="flex flex-col items-center gap-5 py-16 text-center">
+            <div className="absolute inset-0 flex flex-col items-center gap-5 py-16 text-center bg-slate-200 dark:bg-slate-950">
               <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
                 <WifiOff className="w-7 h-7 text-red-400" />
               </div>
@@ -3270,37 +3315,6 @@ function PdfRenderer({
               </Button>
             </div>
           )}
-
-          {/* ✅ PDF canvas + interactive fields */}
-          <div
-            className={cn(
-              'relative mx-auto bg-white shadow-2xl shadow-black/20 rounded-sm',
-              'transition-opacity duration-300',
-              isReady ? 'opacity-100' : 'opacity-0 absolute pointer-events-none',
-            )}
-            style={{ width: pageInfo.cssW || 'auto', height: pageInfo.cssH || 'auto' }}
-          >
-            <canvas ref={canvasRef} className="block rounded-sm" />
-
-            {/* Field overlays — container sized to PDF's CSS pixels */}
-            <div
-              className="absolute inset-0"
-              style={{ width: '100%', height: '100%' }}
-            >
-              {isReady && pageInfo.nativeW > 0 && pageFields.map(field => (
-                <FieldOverlay
-                  key={field.id}
-                  field={field}
-                  nativeWidth={pageInfo.nativeW}
-                  nativeHeight={pageInfo.nativeH}
-                  onSignatureClick={onSignatureClick}
-                  onTextChange={onTextChange}
-                  onDateChange={onDateChange}
-                  onCheckboxChange={onCheckboxChange}
-                />
-              ))}
-            </div>
-          </div>
 
           {/* Page dots */}
           {isReady && totalPages > 1 && totalPages <= 20 && (
@@ -3633,8 +3647,10 @@ export default function TemplateSigner() {
         if (pages[0]) setCurrentPage(pages[0]);
       } catch (e) {
         if (cancelled) return;
-        setError(e?.message || 'Could not load signing session.');
-        setErrorCode(e?.code || null);
+        const code = e?.response?.data?.code || e?.code || null;
+        const msg  = e?.response?.data?.message || e?.message || 'Could not load signing session.';
+        setError(msg);
+        setErrorCode(code);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -3652,7 +3668,7 @@ export default function TemplateSigner() {
 
   // PDF proxy URL (backend serves boss-signed PDF to avoid CORS)
   const pdfProxyUrl = useMemo(
-    () => token ? `${import.meta.env.VITE_API_URL || '/api'}/sign/template/${token}/pdf` : '',
+    () => (token ? templateApi.getPdfProxyUrl(token) : ''),
     [token],
   );
 
@@ -3681,6 +3697,9 @@ export default function TemplateSigner() {
 
     setSubmitting(true);
     try {
+      toast.info('Recording secure location for audit trail…', { duration: 2500 });
+      const gpsCoords = await getBrowserGPS().catch(() => null);
+
       const fieldValues = fields.filter(f => f.value).map(f => ({
         fieldId: f.id, type: f.type, value: f.value,
       }));
@@ -3689,8 +3708,13 @@ export default function TemplateSigner() {
         signatureDataUrl: sigField.value,
         fieldValues,
         clientTime: new Date().toISOString(),
-        // Audit meta collected on mount
-        auditMeta: auditMetaRef.current || {},
+        latitude:   gpsCoords?.latitude  ?? null,
+        longitude:  gpsCoords?.longitude ?? null,
+        auditMeta: {
+          ...(auditMetaRef.current || {}),
+          timezone: getClientTimezone(),
+          deviceType: /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        },
       });
 
       setPhase('signed');
@@ -3871,6 +3895,7 @@ export default function TemplateSigner() {
       {/* PDF Viewer */}
       <main className="flex-1 min-h-0">
         <PdfRenderer
+          key={token}
           pdfUrl={pdfProxyUrl}
           fields={fields}
           currentPage={currentPage}

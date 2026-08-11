@@ -32,10 +32,7 @@ setPersistence(auth, browserLocalPersistence).catch(console.warn);
 
 const googleProvider = new GoogleAuthProvider();
 
-googleProvider.addScope('email');
-googleProvider.addScope('profile');
-
-// ✅ Always show account picker
+// Always show account picker (email/profile are default Google scopes)
 googleProvider.setCustomParameters({
   prompt: 'select_account',
 });

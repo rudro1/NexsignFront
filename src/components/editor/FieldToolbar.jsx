@@ -272,7 +272,7 @@ export default function FieldToolbar({
               color: partyColor,
             }}
           >
-            <MousePointer2 size={11} className="animate-pulse" />
+            <MousePointer2 size={11} />
             Click on PDF to place{' '}
             <span className="font-black capitalize">{activeFieldType}</span>
             {' '}for{' '}

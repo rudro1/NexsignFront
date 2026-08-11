@@ -15,6 +15,7 @@ import {
   signInWithPopup,
   signOut,
   onIdTokenChanged,
+  browserPopupRedirectResolver,
 } from 'firebase/auth';
 // ✅ signInWithRedirect এবং getRedirectResult IMPORT করা হয়নি
 // কারণ এটাই নতুন tab + reload loop এর কারণ
@@ -43,6 +44,9 @@ const getFirebaseError = (code) => {
     'auth/operation-not-allowed':   'This sign-in method is not enabled.',
     'auth/cancelled-popup-request': null,
     'auth/internal-error':          'An internal error occurred. Try again.',
+    'auth/invalid-action':          'Google sign-in failed. Enable Google in Firebase Console and add this site to Authorized Domains.',
+    'auth/unauthorized-domain':     'This domain is not authorized. Add it in Firebase → Authentication → Settings → Authorized domains.',
+    'auth/operation-not-allowed':   'Google sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method.',
   };
   return map.hasOwnProperty(code)
     ? map[code]
@@ -168,7 +172,11 @@ export const AuthProvider = ({ children }) => {
   const googleLogin = useCallback(async () => {
     try {
       // ✅ শুধু popup — কোনো redirect নেই
-      const result = await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(
+        auth,
+        googleProvider,
+        browserPopupRedirectResolver,
+      );
       return result;
 
     } catch (error) {

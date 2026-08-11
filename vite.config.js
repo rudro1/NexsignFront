@@ -6,8 +6,8 @@ import path  from 'path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
-  const backendOrigin = (env.VITE_API_BASE_URL || 'https://nextsignbackendfinal.vercel.app/api')
-    .replace(/\/api$/, ''); // → https://nextsignbackendfinal.vercel.app
+  const backendOrigin = (env.VITE_API_BASE_URL || 'http://localhost:5001/api')
+    .replace(/\/api$/, '');
 
   return {
     plugins: [react({ fastRefresh: true })],

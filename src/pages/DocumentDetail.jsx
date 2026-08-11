@@ -3,7 +3,7 @@ import React, {
   useState, useEffect, useCallback, useMemo, useRef,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '@/api/apiClient';
+import { api, documentApi } from '@/api/apiClient';
 import useSocket from '@/hooks/useSocket';
 
 // ─────────────────────────────────────────────────────────────────
@@ -357,6 +357,8 @@ function AuditEntry({ entry }) {
               { icon: Ic.Globe,   label: 'OS',      val: entry.os },
               { icon: Ic.Globe,   label: 'IP',      val: entry.ip || entry.ipAddress },
               { icon: Ic.MapPin,  label: 'City',    val: entry.city },
+              { icon: Ic.MapPin,  label: 'Region',  val: entry.region },
+              { icon: Ic.MapPin,  label: 'Country', val: entry.country },
               { icon: Ic.MapPin,  label: 'Postal',  val: entry.postalCode },
             ].filter(r => r.val).map(({ icon: Icon, label, val }) => (
               <div key={label} className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -414,6 +416,8 @@ export default function DocumentDetail() {
   const [showDelete,   setShowDelete]   = useState(false);
   const [deleting,     setDeleting]     = useState(false);
   const [copying,      setCopying]      = useState(false);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState('');
+  const [previewPdfError, setPreviewPdfError] = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -464,8 +468,27 @@ export default function DocumentDetail() {
     setAuditLoading(true);
     try {
       const res = await api.get(`/documents/${id}/audit`, { noCache: true });
-      if (mountedRef.current)
-        setAuditLogs(res.data?.logs ?? res.data?.auditLogs ?? []);
+      if (mountedRef.current) {
+        const events = res.data?.audit?.events ?? res.data?.logs ?? res.data?.auditLogs ?? [];
+        setAuditLogs(events.map(e => ({
+          _id:        e._id,
+          action:     e.action === 'email_sent' ? 'sent'
+            : e.action === 'link_clicked' ? 'viewed' : e.action,
+          actorName:  e.actor?.name || e.actorName || e.signerName,
+          actorEmail: e.actor?.email || e.actorEmail,
+          timestamp:  e.timestamp || e.createdAt,
+          device:     e.device,
+          browser:    e.browser,
+          os:         e.os,
+          ip:         e.ipAddress || e.ip,
+          ipAddress:  e.ipAddress || e.ip,
+          city:       e.location?.city || e.city,
+          region:     e.location?.region || e.region,
+          country:    e.location?.country || e.country,
+          postalCode: e.location?.postalCode || e.postalCode,
+          localTime:  e.localTime,
+        })));
+      }
     } catch {
       /* non-critical */
     } finally {
@@ -479,6 +502,35 @@ export default function DocumentDetail() {
       loadAudit();
     }
   }, [loadDoc, loadAudit, id]);
+
+  // ── Load PDF preview via backend proxy (Cloudinary raw PDFs return 401) ──
+  useEffect(() => {
+    if (!doc?._id) return undefined;
+    let cancelled = false;
+    let objectUrl = '';
+
+    setPreviewPdfUrl('');
+    setPreviewPdfError('');
+
+    documentApi.fetchDocumentPdfBlob(doc._id, doc.status === 'completed')
+      .then((res) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setPreviewPdfUrl(objectUrl);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setPreviewPdfError(
+            err?.message || 'Could not load PDF preview. Try re-uploading the document.',
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [doc?._id, doc?.status]);
 
   // ── Socket: real-time updates ─────────────────────────────────
   useEffect(() => {
@@ -779,28 +831,40 @@ export default function DocumentDetail() {
                   </h3>
                   <div className="rounded-xl overflow-hidden border
                                   border-slate-200 dark:border-slate-700
-                                  bg-slate-100 dark:bg-slate-950">
-                    <iframe
-                      src={`${doc.fileUrl}#toolbar=0&navpanes=0`}
-                      className="w-full border-0 block"
-                      style={{ height: '400px' }}
-                      title="Document preview"
-                    />
+                                  bg-slate-100 dark:bg-slate-950 min-h-[200px]">
+                    {previewPdfUrl ? (
+                      <iframe
+                        src={`${previewPdfUrl}#toolbar=0&navpanes=0`}
+                        className="w-full border-0 block"
+                        style={{ height: '400px' }}
+                        title="Document preview"
+                      />
+                    ) : previewPdfError ? (
+                      <div className="p-6 text-center text-sm text-red-600">
+                        {previewPdfError}
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center text-sm text-slate-500">
+                        Loading preview…
+                      </div>
+                    )}
                   </div>
-                  <a
-                    href={doc.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 flex items-center justify-center gap-2
-                               h-9 rounded-xl border border-slate-200
-                               dark:border-slate-700 text-sm font-medium
-                               text-slate-600 dark:text-slate-300
-                               hover:border-[#28ABDF] hover:text-[#28ABDF]
-                               transition-colors"
-                  >
-                    <Ic.Download />
-                    Open full PDF
-                  </a>
+                  {previewPdfUrl && (
+                    <a
+                      href={previewPdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 flex items-center justify-center gap-2
+                                 h-9 rounded-xl border border-slate-200
+                                 dark:border-slate-700 text-sm font-medium
+                                 text-slate-600 dark:text-slate-300
+                                 hover:border-[#28ABDF] hover:text-[#28ABDF]
+                                 transition-colors"
+                    >
+                      <Ic.Download />
+                      Open full PDF
+                    </a>
+                  )}
                 </div>
               )}
             </div>

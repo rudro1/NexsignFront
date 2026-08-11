@@ -1007,7 +1007,7 @@ import {
   XCircle, Eye, Send, RefreshCw, Trash2,
   MoreVertical, Download, AlertTriangle, Loader2,
   LayoutTemplate, PenTool, Search, X, Mail,
-  TrendingUp, FileText,
+  History, FileText, TrendingUp,
 } from 'lucide-react';
 import { Button }   from '@/components/ui/button';
 import { Input }    from '@/components/ui/input';
@@ -1022,11 +1022,16 @@ import {
 } from '@/components/ui/dialog';
 
 import { useTemplate, useTemplateMutations } from '@/hooks/useTemplate';
+import { templateApi } from '@/api/apiClient';
 import SignaturePad from '@/components/signing/SignaturePad';
+import EmailPreviewModal from '@/components/email/EmailPreviewModal';
+import ReuseTemplateModal from '@/components/templates/ReuseTemplateModal';
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════
+const cn = (...c) => c.filter(Boolean).join(' ');
+
 function fmtDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', {
@@ -1044,6 +1049,68 @@ function fmtRelative(d) {
   if (hours < 24) return `${hours}h ago`;
   if (days  < 7)  return `${days}d ago`;
   return fmtDate(d);
+}
+
+function fmtDateTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+const AUDIT_ACTION_STYLE = {
+  boss_signed: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  sent:        'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400',
+  viewed:      'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+  signed:      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
+  declined:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
+};
+
+function TemplateAuditEntry({ entry }) {
+  const [expanded, setExpanded] = useState(false);
+  const actionKey = (entry.action || 'viewed').replace('_template', '');
+  const cls = AUDIT_ACTION_STYLE[actionKey] || AUDIT_ACTION_STYLE.viewed;
+  const location = [entry.city, entry.region, entry.country, entry.postalCode].filter(Boolean).join(', ');
+
+  return (
+    <div className="flex gap-3 py-3 border-b border-slate-50 dark:border-slate-800 last:border-0">
+      <div className="mt-0.5 shrink-0">
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${cls}`}>
+          {(entry.label || entry.action || 'event').replace(/_/g, ' ')}
+        </span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+          {entry.actorName || 'System'}
+          {entry.actorEmail && (
+            <span className="text-slate-400 font-normal ml-1">· {entry.actorEmail}</span>
+          )}
+        </p>
+        <p className="text-[11px] text-slate-400 mt-0.5">{fmtDateTime(entry.timestamp)}</p>
+        {entry.note && <p className="text-[11px] text-slate-500 mt-1">{entry.note}</p>}
+        {(entry.device || entry.browser || entry.ip || entry.ipAddress || location) && (
+          <button
+            type="button"
+            onClick={() => setExpanded(e => !e)}
+            className="text-[11px] text-[#28ABDF] hover:underline mt-1 font-medium"
+          >
+            {expanded ? 'Hide details' : 'Show location & device'}
+          </button>
+        )}
+        {expanded && (
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-slate-500">
+            {entry.localTime && <p><span className="font-semibold">Local time:</span> {entry.localTime}</p>}
+            {location && <p><span className="font-semibold">Location:</span> {location}</p>}
+            {(entry.ip || entry.ipAddress) && <p><span className="font-semibold">IP:</span> {entry.ip || entry.ipAddress}</p>}
+            {entry.device && <p><span className="font-semibold">Device:</span> {entry.device}</p>}
+            {entry.browser && <p><span className="font-semibold">Browser:</span> {entry.browser}</p>}
+            {entry.os && <p><span className="font-semibold">OS:</span> {entry.os}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const SESSION_STATUS = {
@@ -1152,12 +1219,68 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
   );
 }
 
-function SessionRow({ session, templateId, onResend }) {
+function SessionRow({ session, template, onResend, onPreview }) {
   const [resending, setResending] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [resendingCopy, setResendingCopy] = useState(false);
   const cfg = SESSION_STATUS[session.status] || SESSION_STATUS.pending;
-  const Icon = cfg.icon;
+  const templateId = template?._id;
 
   const canResend = ['pending', 'viewed', 'expired'].includes(session.status);
+  const isSigned  = session.status === 'signed';
+  const emailFailed = session.emailDelivered === false && session.emailAttempts > 0;
+
+  const loadSignedPdf = useCallback(async () => {
+    if (!templateId) throw new Error('Template not found.');
+    setPdfLoading(true);
+    try {
+      const { data } = await templateApi.fetchSessionSignedPdfBlob(templateId, session._id);
+      return data;
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [templateId, session._id]);
+
+  const handleViewSigned = async () => {
+    try {
+      const blob = await loadSignedPdf();
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      toast.error(e?.message || 'Could not open signed PDF.');
+    }
+  };
+
+  const handleDownloadSigned = async () => {
+    try {
+      const blob = await loadSignedPdf();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${(template?.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_')}_${session.recipientName || 'signed'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Download started');
+    } catch (e) {
+      toast.error(e?.message || 'Could not download signed PDF.');
+    }
+  };
+
+  const handleResendSignedCopy = async () => {
+    if (!templateId) return;
+    setResendingCopy(true);
+    try {
+      await templateApi.resendSignedCopy(templateId, session._id);
+      toast.success(`Signed copy emailed to ${session.recipientEmail}`);
+    } catch (e) {
+      toast.error(e?.message || 'Could not send signed copy.');
+    } finally {
+      setResendingCopy(false);
+    }
+  };
 
   const handleResend = async () => {
     setResending(true);
@@ -1169,11 +1292,13 @@ function SessionRow({ session, templateId, onResend }) {
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl
-                    border border-slate-100 dark:border-slate-800
-                    bg-white dark:bg-slate-900
+    <div className={`flex items-center gap-3 p-3 rounded-xl
+                    border bg-white dark:bg-slate-900
                     hover:border-slate-200 dark:hover:border-slate-700
-                    transition-colors group">
+                    transition-colors group
+                    ${emailFailed
+                      ? 'border-red-200 dark:border-red-900/40 bg-red-50/30 dark:bg-red-900/10'
+                      : 'border-slate-100 dark:border-slate-800'}`}>
       <div className="w-9 h-9 rounded-xl bg-gradient-to-br
                       from-sky-100 to-sky-200 dark:from-sky-900/40
                       dark:to-sky-900/20 flex items-center justify-center
@@ -1195,7 +1320,19 @@ function SessionRow({ session, templateId, onResend }) {
             </span>
           )}
         </p>
+        {emailFailed && (
+          <p className="text-[10px] text-red-500 font-medium mt-0.5 truncate" title={session.emailError}>
+            Email not delivered — {session.emailError || 'delivery failed'}
+          </p>
+        )}
       </div>
+
+      {emailFailed && (
+        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold
+                          px-2 py-0.5 rounded-full bg-red-100 text-red-600 shrink-0">
+          <AlertTriangle className="w-3 h-3" /> Failed
+        </span>
+      )}
 
       <span className={`hidden sm:inline-flex items-center gap-1.5
                         text-[11px] font-semibold px-2 py-1
@@ -1213,7 +1350,65 @@ function SessionRow({ session, templateId, onResend }) {
       </span>
 
       <div className="flex items-center gap-1 shrink-0">
-        {session.signedFileUrl && (
+        {onPreview && (
+          <button
+            type="button"
+            onClick={() => onPreview(session)}
+            className="p-1.5 rounded-lg text-slate-400
+                       hover:text-indigo-500 hover:bg-indigo-50
+                       dark:hover:bg-indigo-900/20 transition-colors"
+            title="Preview email"
+          >
+            <Eye className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {isSigned && (
+          <>
+            <button
+              type="button"
+              onClick={handleViewSigned}
+              disabled={pdfLoading}
+              className="p-1.5 rounded-lg text-slate-400
+                         hover:text-sky-500 hover:bg-sky-50
+                         dark:hover:bg-sky-900/20 transition-colors
+                         disabled:opacity-50"
+              title="View signed PDF"
+            >
+              {pdfLoading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <FileText className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadSigned}
+              disabled={pdfLoading}
+              className="p-1.5 rounded-lg text-slate-400
+                         hover:text-emerald-500 hover:bg-emerald-50
+                         dark:hover:bg-emerald-900/20 transition-colors
+                         disabled:opacity-50"
+              title="Download signed PDF"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleResendSignedCopy}
+              disabled={resendingCopy}
+              className="p-1.5 rounded-lg text-slate-400
+                         hover:text-violet-500 hover:bg-violet-50
+                         dark:hover:bg-violet-900/20 transition-colors
+                         disabled:opacity-50"
+              title="Email signed copy to employee"
+            >
+              {resendingCopy
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Mail className="w-3.5 h-3.5" />}
+            </button>
+          </>
+        )}
+
+        {session.signedFileUrl && !isSigned && (
           <a
             href={session.signedFileUrl}
             target="_blank"
@@ -1277,13 +1472,22 @@ function BossSignModal({ template, onClose, onSigned }) {
         return;
       }
 
-      const recipientCount = template.stats?.totalRecipients
-        || template.recipients?.length || 0;
+      const data = res.data || {};
+      const sent   = data.emailsSent ?? 0;
+      const failed = data.emailsFailed ?? 0;
+      const total  = data.sessionsCount ?? recipientCount;
 
-      toast.success(
-        `Signed! Emails sent to ${recipientCount} employee${recipientCount !== 1 ? 's' : ''}.`,
-        { duration: 5000 }
-      );
+      if (failed > 0) {
+        toast.warning(
+          `Signed, but ${failed} of ${total} employee emails failed. Check your inbox and resend from Template Detail.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(
+          `Signed! All ${sent} employee emails sent successfully.`,
+          { duration: 5000 },
+        );
+      }
 
       // ✅ BUG 2 FIX: Close modal first
       onClose();
@@ -1441,6 +1645,17 @@ export default function TemplateDetail() {
   const [showBossSign,  setShowBossSign]  = useState(false);
   const [showDelete,    setShowDelete]    = useState(false);
   const [deleting,      setDeleting]      = useState(false);
+  const [resendingFailed, setResendingFailed] = useState(false);
+
+  const [previewOpen,      setPreviewOpen]      = useState(false);
+  const [previewLoading,   setPreviewLoading]   = useState(false);
+  const [previewSubject,   setPreviewSubject]   = useState('');
+  const [previewHtml,      setPreviewHtml]      = useState('');
+  const [previewRecipient, setPreviewRecipient] = useState('');
+  const [showReuse,        setShowReuse]        = useState(false);
+  const [campaigns,        setCampaigns]        = useState([]);
+  const [auditLogs,        setAuditLogs]        = useState([]);
+  const [auditLoading,     setAuditLoading]     = useState(false);
 
   // ✅ BUG 2 FIX: Track if boss sign modal was already shown
   // to prevent re-opening after navigation back.
@@ -1461,6 +1676,31 @@ export default function TemplateDetail() {
       return () => clearTimeout(t);
     }
   }, [template?.status, template?.bossSignature?.signedAt, template?.bossSignedFileUrl]);
+
+  useEffect(() => {
+    if (!id || !template?.bossSignedFileUrl) return;
+    templateApi.listCampaigns(id)
+      .then(res => setCampaigns(res.data?.campaigns || []))
+      .catch(() => {});
+  }, [id, template?.bossSignedFileUrl, template?.status]);
+
+  const loadAudit = useCallback(async () => {
+    if (!id) return;
+    setAuditLoading(true);
+    try {
+      const res = await templateApi.getAudit(id);
+      const events = res.data?.audit?.events ?? res.data?.events ?? [];
+      setAuditLogs(Array.isArray(events) ? events : []);
+    } catch {
+      setAuditLogs([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'audit') loadAudit();
+  }, [activeTab, loadAudit]);
 
   const stats = useMemo(() => {
     if (sessionStats) return sessionStats;
@@ -1487,16 +1727,64 @@ export default function TemplateDetail() {
     return list;
   }, [sessions, sessionFilter, search]);
 
+  const failedEmailCount = useMemo(
+    () => sessions.filter(s => s.emailDelivered === false && (s.emailAttempts || 0) > 0).length,
+    [sessions],
+  );
+
+  const openSessionPreview = useCallback(async (session) => {
+    if (!template) return;
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewRecipient(`${session.recipientName} <${session.recipientEmail}>`);
+    try {
+      const res = await templateApi.previewEmployeeEmail({
+        employee: {
+          name:        session.recipientName,
+          email:       session.recipientEmail,
+          designation: session.recipientDesignation || '',
+        },
+      }, template._id);
+      setPreviewSubject(res.data?.subject || '');
+      setPreviewHtml(res.data?.html || '');
+    } catch (err) {
+      toast.error(err?.message || 'Could not load preview.');
+      setPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [template]);
+
+  const handleResendFailed = useCallback(async () => {
+    setResendingFailed(true);
+    try {
+      const res = await templateApi.resendFailedEmails(id);
+      const data = res.data || {};
+      if (data.stillFailed > 0) {
+        toast.warning(data.message || `${data.stillFailed} emails still failing.`);
+      } else {
+        toast.success(data.message || 'All failed emails resent successfully.');
+      }
+      refetch();
+    } catch (err) {
+      toast.error(err?.message || 'Resend failed.');
+    } finally {
+      setResendingFailed(false);
+    }
+  }, [id, refetch]);
+
   const handleResend = useCallback(async (sessionId) => {
     const res = await mutations.resendEmail(id, sessionId);
     if (res.success) {
-      toast.success('Reminder sent!');
+      toast.success('Email sent!');
       optimisticSessionUpdate(sessionId, {
-        reminderCount: 1,
+        reminderCount:  1,
         lastReminderAt: new Date().toISOString(),
+        emailDelivered: true,
+        emailError:     '',
       });
     } else {
-      toast.error(res.error || 'Failed to send reminder.');
+      toast.error(res.error || 'Failed to send email.');
     }
   }, [id, mutations, optimisticSessionUpdate]);
 
@@ -1689,6 +1977,18 @@ export default function TemplateDetail() {
             </Button>
 
             {/* ✅ BUG 2 FIX: Only show Sign Now button if not yet signed */}
+            {template.bossSignature?.signedAt && (
+              <Button
+                onClick={() => setShowReuse(true)}
+                variant="outline"
+                className="h-9 px-4 rounded-xl font-semibold gap-2
+                           border-[#28ABDF] text-[#28ABDF] hover:bg-sky-50"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Send Again
+              </Button>
+            )}
+
             {isBossSign && !template.bossSignature?.signedAt && (
               <Button
                 onClick={() => setShowBossSign(true)}
@@ -1810,6 +2110,116 @@ export default function TemplateDetail() {
           />
         </div>
 
+        {/* CAMPAIGN HISTORY */}
+        {campaigns.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 mb-3">
+              <History className="w-4 h-4" /> Send History ({campaigns.length})
+            </h3>
+            <div className="space-y-2">
+              {campaigns.slice(0, 5).map(c => (
+                <div key={c._id} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <div>
+                    <p className="font-semibold text-slate-800 dark:text-white">{c.title}</p>
+                    <p className="text-slate-400">{c.recipients?.length || 0} employees · {c.status}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full font-medium
+                    ${c.status === 'active' ? 'bg-sky-100 text-sky-700' :
+                      c.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                      c.status === 'approver_pending' ? 'bg-amber-100 text-amber-700' :
+                      'bg-slate-100 text-slate-600'}`}>
+                    {c.status.replace('_', ' ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* FAILED EMAIL ALERT */}
+        {failedEmailCount > 0 && (
+          <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200
+                          dark:border-red-800/40 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700 dark:text-red-400">
+                  {failedEmailCount} employee{failedEmailCount !== 1 ? 's' : ''} did not receive their email
+                </p>
+                <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
+                  Failed deliveries are highlighted below. Use Resend or retry all failed emails.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={handleResendFailed}
+              disabled={resendingFailed}
+              variant="outline"
+              className="h-9 px-4 rounded-xl border-red-300 text-red-600
+                         hover:bg-red-100 shrink-0 gap-2"
+            >
+              {resendingFailed
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Mail className="w-4 h-4" />
+              }
+              Resend All Failed
+            </Button>
+          </div>
+        )}
+
+        {/* TAB BAR */}
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+          {[
+            { id: 'sessions', label: `Employees (${stats.total || 0})` },
+            { id: 'audit',    label: `Audit Trail (${auditLogs.length || '…'})` },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors',
+                activeTab === tab.id
+                  ? 'border-[#28ABDF] text-[#28ABDF]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'audit' && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <History className="w-4 h-4 text-[#28ABDF]" />
+                Signing Audit Trail
+              </h3>
+              <Button variant="outline" size="sm" onClick={loadAudit} disabled={auditLoading}
+                className="h-8 rounded-lg gap-1.5 text-xs">
+                <RefreshCw className={cn('w-3.5 h-3.5', auditLoading && 'animate-spin')} />
+                Refresh
+              </Button>
+            </div>
+            <div className="px-4 py-2 max-h-[520px] overflow-y-auto">
+              {auditLoading ? (
+                <div className="py-12 flex justify-center">
+                  <Loader2 className="w-6 h-6 text-[#28ABDF] animate-spin" />
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <p className="py-12 text-center text-sm text-slate-400">No audit events yet</p>
+              ) : (
+                auditLogs.map((entry, i) => (
+                  <TemplateAuditEntry key={entry._id || i} entry={entry} />
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'sessions' && (
+          <>
         {/* PROGRESS */}
         {(isActive || isCompleted) && stats.total > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border
@@ -1958,8 +2368,9 @@ export default function TemplateDetail() {
                 <SessionRow
                   key={session._id}
                   session={session}
-                  templateId={id}
+                  template={template}
                   onResend={handleResend}
+                  onPreview={openSessionPreview}
                 />
               ))
             )}
@@ -1971,8 +2382,29 @@ export default function TemplateDetail() {
             </div>
           )}
         </div>
+          </>
+        )}
 
       </div>
+
+      <EmailPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        subject={previewSubject}
+        html={previewHtml}
+        loading={previewLoading}
+        recipientLabel={previewRecipient}
+      />
+
+      <ReuseTemplateModal
+        template={template}
+        open={showReuse}
+        onClose={() => setShowReuse(false)}
+        onSuccess={() => {
+          refetch();
+          templateApi.listCampaigns(id).then(res => setCampaigns(res.data?.campaigns || []));
+        }}
+      />
     </div>
   );
 }

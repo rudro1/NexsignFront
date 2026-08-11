@@ -123,7 +123,11 @@ export default function Login({ toggle }) {
       } else if (status === 403) {
         toast.error('Account disabled. Contact support.');
       } else if (err.__network || err.__offline) {
-        toast.error('No internet connection.');
+        toast.error(
+          err.__offline
+            ? 'No internet connection.'
+            : 'Cannot reach the server. Is the backend running? Check VITE_API_BASE_URL.',
+        );
       } else {
         toast.error(err.message || 'Login failed. Please try again.');
       }
@@ -191,7 +195,11 @@ export default function Login({ toggle }) {
       } else if (status === 403) {
         toast.error('Account disabled. Contact support.');
       } else if (err?.__network || err?.__offline) {
-        toast.error('No internet connection.');
+        toast.error(
+          err.__offline
+            ? 'No internet connection.'
+            : 'Cannot reach the server. Is the backend running? Check VITE_API_BASE_URL.',
+        );
       } else if (code === 'RATE_LIMITED') {
         toast.error('Too many attempts. Please wait a moment.');
       } else {

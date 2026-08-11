@@ -4,7 +4,7 @@ import React, {
   useMemo, useRef,
 } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { api } from '@/api/apiClient';
+import { api, documentApi } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
@@ -22,6 +22,8 @@ import FieldToolbar         from '@/components/editor/FieldToolbar';
 import PdfViewer            from '@/components/editor/PdfViewer';
 import FieldPropertiesPanel from '@/components/editor/FieldPropertiesPanel';
 import { useFieldAutoSave } from '@/hooks/useFieldAutoSave';
+import CustomEmailEditor from '@/components/email/CustomEmailEditor';
+import EmailPreviewModal from '@/components/email/EmailPreviewModal';
 
 const STEPS = [
   { id: 1, label: 'Upload',  desc: 'PDF & Branding',  icon: Upload       },
@@ -192,6 +194,10 @@ export default function DocumentEditor() {
 
   // ── Core ───────────────────────────────────────────────────
   const [rawFile,   setRawFile]   = useState(null);
+  const [cachedPdfFile, setCachedPdfFile] = useState(null);
+  const [draftDocId, setDraftDocId] = useState(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [sendStage, setSendStage] = useState('');
   const [title,     setTitle]     = useState('');
   const [fileUrl,   setFileUrl]   = useState('');
   const [fileReady, setFileReady] = useState(false);
@@ -207,7 +213,17 @@ export default function DocumentEditor() {
   const [companyLogo,        setCompanyLogo]        = useState('');
   const [companyLogoFile,    setCompanyLogoFile]    = useState(null);
   const [companyLogoPreview, setCompanyLogoPreview] = useState('');
+  const [emailHeaderColor,   setEmailHeaderColor]   = useState('#0f172a');
   const [companyName,        setCompanyName]        = useState('');
+  const [message,            setMessage]            = useState('');
+  const [useCustomEmailBody, setUseCustomEmailBody] = useState(false);
+  const [customEmailBody,    setCustomEmailBody]    = useState('');
+  const [customEmailSubject, setCustomEmailSubject] = useState('');
+  const messageRef = useRef(null);
+  const [defaultPreviewOpen, setDefaultPreviewOpen] = useState(false);
+  const [defaultPreviewLoading, setDefaultPreviewLoading] = useState(false);
+  const [defaultPreviewSubject, setDefaultPreviewSubject] = useState('');
+  const [defaultPreviewHtml, setDefaultPreviewHtml] = useState('');
 
   // ── CC form ────────────────────────────────────────────────
   const [ccForm, setCcForm] = useState({
@@ -229,7 +245,9 @@ export default function DocumentEditor() {
   // Mobile panel toggle
   const [mobilePanelView, setMobilePanelView] = useState('sidebar');
 
-  const { save, saveNow } = useFieldAutoSave(docId);
+  const effectiveDocId = docId || draftDocId;
+
+  const { save, saveNow } = useFieldAutoSave(effectiveDocId);
 
   // ── Refs ───────────────────────────────────────────────────
   const fileUrlRef     = useRef(fileUrl);
@@ -277,7 +295,12 @@ export default function DocumentEditor() {
         setCcList(d.ccList || []);
         setCompanyLogo(d.companyLogo || '');
         setCompanyLogoPreview(d.companyLogo || '');
+        setEmailHeaderColor(d.emailHeaderColor || '#0f172a');
         setCompanyName(d.companyName || '');
+        setMessage(d.message || '');
+        setUseCustomEmailBody(!!d.useCustomEmailBody);
+        setCustomEmailBody(d.customEmailBody || '');
+        setCustomEmailSubject(d.customEmailSubject || '');
         setFields(
           (d.fields || []).map(f =>
             typeof f === 'string' ? JSON.parse(f) : f,
@@ -291,8 +314,41 @@ export default function DocumentEditor() {
       });
   }, [docId]); // eslint-disable-line
 
+  // Prefill branding from profile on new documents
+  useEffect(() => {
+    if (docId || !user) return;
+    setCompanyName(prev => prev || user.company_name || '');
+    if (!companyLogo && user.company_logo) {
+      setCompanyLogo(user.company_logo);
+      setCompanyLogoPreview(user.company_logo);
+    }
+  }, [docId, user]); // eslint-disable-line
+
+  // Fetch PDF through backend when editing an existing Cloudinary-stored doc
+  useEffect(() => {
+    if (!effectiveDocId || rawFile) {
+      setCachedPdfFile(null);
+      return undefined;
+    }
+    if (!fileUrl || fileUrl.startsWith('blob:')) return undefined;
+
+    let cancelled = false;
+    documentApi.fetchDocumentPdfBlob(effectiveDocId)
+      .then((res) => {
+        if (!cancelled) setCachedPdfFile(res.data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[DocumentEditor] PDF cache failed:', err);
+          toast.error('Could not load PDF. Re-upload the file to continue.');
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [effectiveDocId, fileUrl, rawFile]);
+
   // ── File select ────────────────────────────────────────────
-  const handleFileSelect = useCallback((e) => {
+  const handleFileSelect = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== 'application/pdf') {
@@ -306,21 +362,53 @@ export default function DocumentEditor() {
     revokeBlob(fileUrlRef.current);
     const url = URL.createObjectURL(file);
     setRawFile(file);
+    setDraftDocId(null);
     setTitle(prev => prev || file.name.replace(/\.pdf$/i, ''));
     setFileUrl(url);
     setFileReady(true);
     setFields([]);
     setCurrentPage(1);
     e.target.value = '';
+
+    // Cloud upload deferred until Next/Send — preview is instant from local file
   }, []);
 
-  const handleLogoSelect = useCallback((e) => {
+  const uploadDraftPdf = useCallback(async (file) => {
+    if (!file) return null;
+    setUploadingPdf(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post('/documents/upload', fd);
+      const uploaded = res.data?.document;
+      if (uploaded?._id && mountedRef.current) {
+        setDraftDocId(uploaded._id);
+        return uploaded._id;
+      }
+    } catch (err) {
+      console.error('[pdf upload]', err);
+    } finally {
+      if (mountedRef.current) setUploadingPdf(false);
+    }
+    return null;
+  }, []);
+
+  const handleLogoSelect = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     revokeBlob(logoPreviewRef.current);
     setCompanyLogoFile(file);
     setCompanyLogoPreview(URL.createObjectURL(file));
     e.target.value = '';
+    try {
+      const lf = new FormData();
+      lf.append('logo', file);
+      const lr = await api.post('/documents/upload-logo', lf);
+      if (lr.data?.logoUrl) setCompanyLogo(lr.data.logoUrl);
+    } catch (err) {
+      console.error('[logo upload]', err);
+      toast.warning('Logo preview saved — will upload again when sending.');
+    }
   }, []);
 
   // ── CC ─────────────────────────────────────────────────────
@@ -362,12 +450,12 @@ export default function DocumentEditor() {
 
   // ── Auto-save fields for existing documents ────────────────
   useEffect(() => {
-    if (!docId || step !== 4) return;
+    if (!effectiveDocId || step !== 4) return;
     setSaveStatus('pending');
     save(fields);
     const t = setTimeout(() => setSaveStatus('saved'), 1600);
     return () => clearTimeout(t);
-  }, [fields, docId, step, save]);
+  }, [fields, effectiveDocId, step, save]);
 
   // ── Step navigation ────────────────────────────────────────
   const goToStep = useCallback((target) => {
@@ -392,8 +480,13 @@ export default function DocumentEditor() {
       toast.error('Place at least one field on the PDF.');
       return;
     }
-    if (step < 5) goToStep(step + 1);
-  }, [step, fileUrl, title, parties, fields, goToStep]);
+    if (step < 5) {
+      if (step === 1 && rawFile && !draftDocId && !uploadingPdf) {
+        uploadDraftPdf(rawFile);
+      }
+      goToStep(step + 1);
+    }
+  }, [step, fileUrl, title, parties, fields, goToStep, rawFile, draftDocId, uploadingPdf, uploadDraftPdf]);
 
   const prevStep = useCallback(() => {
     if (step > 1) setStep(s => s - 1);
@@ -416,14 +509,19 @@ export default function DocumentEditor() {
   const handleSend = useCallback(async () => {
     if (!validate()) return;
     setProcessing(true);
+    setSendStage('Preparing…');
 
     try {
-      if (docId) await saveNow(fields);
+      if (effectiveDocId) {
+        setSendStage('Saving fields…');
+        await saveNow(fields);
+      }
 
       // ── Step 1: Logo upload (যদি নতুন file থাকে) ─────────
       let finalLogoUrl = companyLogo;
 
       if (companyLogoFile) {
+        setSendStage('Uploading logo…');
         try {
           const lf = new FormData();
           lf.append('logo', companyLogoFile);
@@ -432,36 +530,39 @@ export default function DocumentEditor() {
             finalLogoUrl = lr.data.logoUrl;
           }
         } catch (logoErr) {
-          // Logo upload fail হলেও document send চলবে
           console.error('[logo upload]', logoErr);
-          toast.warning('Logo upload failed, continuing without logo.');
-          finalLogoUrl = '';
+          toast.warning('Logo upload failed — using previously saved logo if available.');
+          finalLogoUrl = companyLogo || finalLogoUrl || '';
         }
       }
 
       // ── Step 2: Build FormData ────────────────────────────
       const formData = new FormData();
 
-      // PDF file (নতুন upload হলে)
-      if (rawFile) {
+      // PDF only if not already uploaded as draft
+      if (rawFile && !effectiveDocId) {
+        setSendStage('Uploading PDF…');
         formData.append('file', rawFile);
       }
 
-      // Document data
       formData.append('title',       title.trim());
       formData.append('parties',     JSON.stringify(parties));
       formData.append('fields',      JSON.stringify(fields));
-      formData.append('ccList',      JSON.stringify(ccList));   // ← FIXED: 'ccList'
+      formData.append('ccList',      JSON.stringify(ccList));
       formData.append('totalPages',  String(totalPages));
       formData.append('companyName', companyName.trim());
       formData.append('companyLogo', finalLogoUrl || '');
+      formData.append('emailHeaderColor', emailHeaderColor || '#0f172a');
+      formData.append('message', useCustomEmailBody ? '' : (message.trim() || ''));
+      formData.append('useCustomEmailBody', String(useCustomEmailBody));
+      formData.append('customEmailBody', useCustomEmailBody ? customEmailBody : '');
+      formData.append('customEmailSubject', useCustomEmailBody ? customEmailSubject : '');
 
-      // Existing doc ID
-      if (docId && docId !== 'undefined' && docId !== 'null') {
-        formData.append('docId', docId);
+      if (effectiveDocId && effectiveDocId !== 'undefined' && effectiveDocId !== 'null') {
+        formData.append('docId', effectiveDocId);
       }
 
-      // ── Step 3: Send ──────────────────────────────────────
+      setSendStage('Sending invitations…');
       await api.post('/documents/upload-and-send', formData);
 
       toast.success('Document sent for signing! ✉️');
@@ -473,13 +574,17 @@ export default function DocumentEditor() {
         || 'Failed to send document.';
       toast.error(msg);
     } finally {
-      if (mountedRef.current) setProcessing(false);
+      if (mountedRef.current) {
+        setProcessing(false);
+        setSendStage('');
+      }
     }
   }, [
     validate,
     rawFile, title, parties, ccList,
     fields, totalPages, companyName,
-    docId, companyLogoFile, companyLogo,
+    effectiveDocId, companyLogoFile, companyLogo, emailHeaderColor,
+    message, useCustomEmailBody, customEmailBody, customEmailSubject,
     saveNow, navigate,
   ]);
 
@@ -616,7 +721,7 @@ export default function DocumentEditor() {
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Send className="w-3.5 h-3.5" />
               }
-              {processing ? 'Sending…' : 'Send Now'}
+              {processing ? (sendStage || 'Sending…') : 'Send Now'}
             </Button>
           )}
         </div>
@@ -720,6 +825,13 @@ export default function DocumentEditor() {
                                     truncate">
                         {title || 'document'}.pdf
                       </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {uploadingPdf
+                          ? 'Saving copy in background…'
+                          : draftDocId
+                            ? 'Ready to send'
+                            : 'Preview ready'}
+                      </p>
                       <button
                         type="button"
                         onClick={() => {
@@ -727,6 +839,7 @@ export default function DocumentEditor() {
                           setFileReady(false);
                           setFileUrl('');
                           setRawFile(null);
+                          setDraftDocId(null);
                           setFields([]);
                         }}
                         className="text-xs text-[#28ABDF]
@@ -850,6 +963,29 @@ export default function DocumentEditor() {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Email Header Color
+                    </Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={emailHeaderColor}
+                        onChange={e => setEmailHeaderColor(e.target.value)}
+                        className="h-10 w-14 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer bg-white"
+                      />
+                      <Input
+                        value={emailHeaderColor}
+                        onChange={e => setEmailHeaderColor(e.target.value)}
+                        placeholder="#0f172a"
+                        className="h-10 rounded-xl border-slate-200 dark:border-slate-700 text-sm flex-1"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Background color for the header in signing emails.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1216,6 +1352,94 @@ export default function DocumentEditor() {
                 ))}
               </div>
 
+              {/* Email content */}
+              <CustomEmailEditor
+                variant="sequential"
+                useCustom={useCustomEmailBody}
+                onUseCustomChange={setUseCustomEmailBody}
+                subject={customEmailSubject}
+                onSubjectChange={setCustomEmailSubject}
+                body={customEmailBody}
+                onBodyChange={setCustomEmailBody}
+                previewFn={documentApi.previewSigningEmail}
+                previewContext={{
+                  documentTitle: title.trim() || 'Document Title',
+                  companyName:   companyName.trim(),
+                  companyLogo:   companyLogo,
+                  emailHeaderColor,
+                  senderName:    user?.full_name || '',
+                  signerName:    parties[0]?.name || 'Signer Name',
+                  partyNumber:   1,
+                  totalParties:  parties.length,
+                  message:       message.trim(),
+                }}
+              />
+
+              {!useCustomEmailBody && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Optional note (added to default email)
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px] rounded-lg gap-1"
+                      onClick={async () => {
+                        setDefaultPreviewOpen(true);
+                        setDefaultPreviewLoading(true);
+                        try {
+                          const res = await documentApi.previewSigningEmail({
+                            documentTitle: title.trim() || 'Document Title',
+                            companyName: companyName.trim(),
+                            companyLogo: companyLogo,
+                            emailHeaderColor,
+                            message: message.trim(),
+                            signerName: parties[0]?.name || 'Signer Name',
+                            partyNumber: 1,
+                            totalParties: parties.length,
+                          });
+                          setDefaultPreviewSubject(res.data?.subject || '');
+                          setDefaultPreviewHtml(res.data?.html || '');
+                        } catch (err) {
+                          toast.error(err?.message || 'Preview failed.');
+                          setDefaultPreviewOpen(false);
+                        } finally {
+                          setDefaultPreviewLoading(false);
+                        }
+                      }}
+                    >
+                      <Eye className="w-3 h-3" /> Preview
+                    </Button>
+                  </div>
+                  <textarea
+                    ref={messageRef}
+                    value={message}
+                    onChange={e => setMessage(e.target.value)}
+                    rows={3}
+                    placeholder="Short personal note included in the default email template…"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700
+                               bg-white dark:bg-slate-900 text-sm px-3 py-2 resize-none
+                               focus:outline-none focus:ring-2 focus:ring-[#28ABDF]/30"
+                  />
+                </div>
+              )}
+
+              <EmailPreviewModal
+                open={defaultPreviewOpen}
+                onClose={() => setDefaultPreviewOpen(false)}
+                subject={defaultPreviewSubject}
+                html={defaultPreviewHtml}
+                loading={defaultPreviewLoading}
+                recipientLabel={parties[0]?.name || 'First signer'}
+                onEdit={() => {
+                  setDefaultPreviewOpen(false);
+                  setTimeout(() => messageRef.current?.focus(), 100);
+                }}
+                editLabel="Edit email note"
+              />
+
               {/* Info box */}
               <div className="p-4 rounded-2xl bg-sky-50 dark:bg-sky-900/20
                               border border-sky-100 dark:border-sky-800">
@@ -1246,7 +1470,7 @@ export default function DocumentEditor() {
                   ? <Loader2 className="w-4 h-4 animate-spin" />
                   : <Send className="w-4 h-4" />
                 }
-                {processing ? 'Sending…' : 'Send for Signing'}
+                {processing ? (sendStage || 'Sending…') : 'Send for Signing'}
               </Button>
             </div>
           )}
@@ -1262,15 +1486,10 @@ export default function DocumentEditor() {
           }
         `}>
           {fileReady ? (
-            <div className="flex-1 overflow-auto flex justify-center
-                            items-start p-4 lg:p-8">
-              <div className="shadow-2xl shadow-slate-300/40
-                              dark:shadow-black/60 rounded-xl
-                              overflow-hidden
-                              ring-1 ring-slate-200/80
-                              dark:ring-slate-700/50">
-                <PdfViewer
+            <div className="flex-1 overflow-hidden flex flex-col w-full min-h-0">
+              <PdfViewer
                   fileUrl={fileUrl}
+                  localFile={rawFile || cachedPdfFile}
                   fields={fields}
                   onFieldsChange={setFields}
                   currentPage={currentPage}
@@ -1280,8 +1499,7 @@ export default function DocumentEditor() {
                   pendingFieldType={pendingFieldType}
                   parties={parties}
                   onFieldPlaced={() => {
-                    setPendingFieldType(null);
-                    setMobilePanelView('sidebar');
+                    if (window.innerWidth < 1024) setMobilePanelView('sidebar');
                   }}
                   selectedFieldId={selectedFieldId}
                   onFieldSelect={setSelectedFieldId}
@@ -1289,7 +1507,6 @@ export default function DocumentEditor() {
                   fontFamily={editorFontFamily}
                   fontSize={editorFontSize}
                 />
-              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center
