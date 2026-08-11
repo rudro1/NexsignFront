@@ -15,6 +15,16 @@ const firebaseConfig = {
   appId:             import.meta.env.VITE_appId,
 };
 
+const missingFirebase = ['VITE_apiKey', 'VITE_authDomain', 'VITE_projectId', 'VITE_appId']
+  .filter(k => !import.meta.env[k]);
+if (missingFirebase.length) {
+  console.error(
+    '[Firebase] Missing env vars:',
+    missingFirebase.join(', '),
+    '— add them in .env or Vercel project settings.',
+  );
+}
+
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 

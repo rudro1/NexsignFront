@@ -6,7 +6,9 @@ import axios from 'axios';
 // ═══════════════════════════════════════════════════════════════
 const BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  'https://nexsignbackendfinal.vercel.app/api'
+  (import.meta.env.PROD
+    ? 'https://nexsignbackendrepo.vercel.app/api'
+    : 'http://localhost:5001/api')
 ).replace(/\/$/, '');
 
 const TIMEOUT_NORMAL = 20_000;  // 20s
