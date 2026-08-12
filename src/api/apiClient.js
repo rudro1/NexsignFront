@@ -581,6 +581,8 @@ function publicApiUrl(path) {
   return `${BASE}${p}`;
 }
 
+export { publicApiUrl };
+
 /** Public GET without cookies — avoids CORS issues on signing pages */
 export async function publicGet(path, options = {}) {
   const url = publicApiUrl(path);
