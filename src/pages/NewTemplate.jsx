@@ -210,6 +210,15 @@ export default function NewTemplate() {
   const logoPreviewRef = useRef(companyLogoPreview);
   const mountedRef     = useRef(true);
 
+  useEffect(() => {
+    if (user?.company_logo && !companyLogoUrl) {
+      setCompanyLogoUrl(user.company_logo);
+    }
+    if (user?.company_name && !companyName) {
+      setCompanyName(user.company_name);
+    }
+  }, [user, companyLogoUrl, companyName]);
+
   useEffect(() => { fileUrlRef.current     = fileUrl;            }, [fileUrl]);
   useEffect(() => { logoPreviewRef.current = companyLogoPreview; }, [companyLogoPreview]);
   useEffect(() => {
@@ -786,7 +795,7 @@ const payload = {
                     <div className="flex items-center gap-3">
                       <input
                         type="color"
-                        value={emailHeaderColor}
+                        value={/^#[0-9A-Fa-f]{6}$/.test(emailHeaderColor) ? emailHeaderColor : '#0f172a'}
                         onChange={e => setEmailHeaderColor(e.target.value)}
                         className="h-10 w-14 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer bg-white"
                       />

@@ -1475,16 +1475,21 @@ function BossSignModal({ template, onClose, onSigned }) {
       const data = res.data || {};
       const sent   = data.emailsSent ?? 0;
       const failed = data.emailsFailed ?? 0;
-      const total  = data.sessionsCount ?? recipientCount;
+      const total  = data.sessionsCount ?? template.recipients?.length ?? 0;
 
-      if (failed > 0) {
+      if (data.phase === 'approver_pending') {
+        toast.success(
+          data.message || 'Signed! First approver has been emailed.',
+          { duration: 6000 },
+        );
+      } else if (failed > 0) {
         toast.warning(
           `Signed, but ${failed} of ${total} employee emails failed. Check your inbox and resend from Template Detail.`,
           { duration: 8000 },
         );
       } else {
         toast.success(
-          `Signed! All ${sent} employee emails sent successfully.`,
+          data.message || `Signed! All ${sent} employee emails sent successfully.`,
           { duration: 5000 },
         );
       }
