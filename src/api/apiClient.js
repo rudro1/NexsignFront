@@ -386,6 +386,19 @@ export const documentApi = {
 
     return { data: await res.blob(), status: res.status };
   },
+
+  /** Reuse sequential document — same PDF + fields, new signers */
+  reuseDocument: (docId, data) =>
+    api.post(`/documents/${docId}/reuse`, data).then(res => {
+      apiCache.invalidatePattern('/documents');
+      return res;
+    }),
+
+  resendPartyEmail: (docId, partyId) =>
+    api.post(`/documents/${docId}/parties/${partyId}/resend`),
+
+  resendSignedCopy: (docId, partyId) =>
+    api.post(`/documents/${docId}/parties/${partyId}/resend-signed`),
 };
 
 // ── Templates ─────────────────────────────────────────────────

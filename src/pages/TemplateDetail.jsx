@@ -1024,6 +1024,7 @@ import {
 import { useTemplate, useTemplateMutations } from '@/hooks/useTemplate';
 import { templateApi } from '@/api/apiClient';
 import SignaturePad from '@/components/signing/SignaturePad';
+import BossExtraFields from '@/components/signing/BossExtraFields';
 import EmailPreviewModal from '@/components/email/EmailPreviewModal';
 import ReuseTemplateModal from '@/components/templates/ReuseTemplateModal';
 import SignedPdfPreviewModal from '@/components/signing/SignedPdfPreviewModal';

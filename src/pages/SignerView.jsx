@@ -527,8 +527,10 @@ function PdfRenderer({
   const MAX_RETRIES = 3;
 
   const pageFields = useMemo(
-    () => fields.filter(f => (f.page || 1) === currentPage),
-    [fields, currentPage],
+    () => fields.filter(
+      f => (f.page || 1) === currentPage && f.partyIndex === signerIndex,
+    ),
+    [fields, currentPage, signerIndex],
   );
 
   const firstUnfilledId = useMemo(() => {

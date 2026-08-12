@@ -5,6 +5,7 @@ import React, {
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, documentApi } from '@/api/apiClient';
 import useSocket from '@/hooks/useSocket';
+import ReuseDocumentModal from '@/components/documents/ReuseDocumentModal';
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -140,6 +141,11 @@ const Ic = {
     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+    </svg>
+  ),
+  Reuse: () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   ),
 };
@@ -414,7 +420,9 @@ export default function DocumentDetail() {
   const [error,        setError]        = useState(null);
   const [activeTab,    setActiveTab]    = useState('overview');
   const [showDelete,   setShowDelete]   = useState(false);
+  const [showReuse,    setShowReuse]    = useState(false);
   const [deleting,     setDeleting]     = useState(false);
+  const [resendState,  setResendState]  = useState({});
   const [copying,      setCopying]      = useState(false);
   const [previewPdfUrl, setPreviewPdfUrl] = useState('');
   const [previewPdfError, setPreviewPdfError] = useState('');
@@ -512,7 +520,9 @@ export default function DocumentDetail() {
     setPreviewPdfUrl('');
     setPreviewPdfError('');
 
-    documentApi.fetchDocumentPdfBlob(doc._id, doc.status === 'completed')
+    const wantSigned = doc.status === 'completed';
+
+    documentApi.fetchDocumentPdfBlob(doc._id, wantSigned)
       .then((res) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(res.data);
@@ -530,7 +540,14 @@ export default function DocumentDetail() {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [doc?._id, doc?.status]);
+  }, [doc?._id, doc?.status, doc?.signedFileUrl]);
+
+  // ── Poll while finalize runs (completed but signed PDF not saved yet) ──
+  useEffect(() => {
+    if (!doc?._id || doc.status !== 'completed' || doc.signedFileUrl) return undefined;
+    const timer = setInterval(() => { loadDoc(); }, 4000);
+    return () => clearInterval(timer);
+  }, [doc?._id, doc?.status, doc?.signedFileUrl, loadDoc]);
 
   // ── Socket: real-time updates ─────────────────────────────────
   useEffect(() => {
@@ -541,13 +558,74 @@ export default function DocumentDetail() {
         setDoc(prev => prev ? { ...prev, ...updated } : updated);
       }
     };
+    const onCompleted = (payload) => {
+      if (!mountedRef.current) return;
+      if (payload.documentId === id) {
+        setDoc(prev => prev ? {
+          ...prev,
+          status: 'completed',
+          completedAt: payload.completedAt || prev.completedAt,
+        } : prev);
+        loadDoc();
+      }
+    };
+    const onFinalized = (payload) => {
+      if (!mountedRef.current) return;
+      if (payload.documentId === id) {
+        setDoc(prev => prev ? {
+          ...prev,
+          status: 'completed',
+          signedFileUrl: payload.signedPdfUrl || prev.signedFileUrl,
+        } : prev);
+        loadDoc();
+      }
+    };
     const cleanup1 = socket.on('document:updated', onUpdate);
     const cleanup2 = socket.on('document:signed',  onUpdate);
+    const cleanup3 = socket.on('document:completed', onCompleted);
+    const cleanup4 = socket.on('document:finalized', onFinalized);
     return () => {
       if (typeof cleanup1 === 'function') cleanup1();
       if (typeof cleanup2 === 'function') cleanup2();
+      if (typeof cleanup3 === 'function') cleanup3();
+      if (typeof cleanup4 === 'function') cleanup4();
     };
-  }, [socket, id]);
+  }, [socket, id, loadDoc]);
+
+  const setResendBusy = useCallback((partyId, action, busy) => {
+    setResendState(prev => ({
+      ...prev,
+      [`${partyId}:${action}`]: busy,
+    }));
+  }, []);
+
+  const handleResendSigning = useCallback(async (partyId) => {
+    setResendBusy(partyId, 'sign', true);
+    try {
+      const res = await documentApi.resendPartyEmail(id, partyId);
+      showToast(res.data?.message || 'Signing email resent.', 'success');
+    } catch (err) {
+      showToast(err?.message || 'Resend failed.', 'error');
+    } finally {
+      setResendBusy(partyId, 'sign', false);
+    }
+  }, [id, showToast, setResendBusy]);
+
+  const handleResendSigned = useCallback(async (partyId) => {
+    setResendBusy(partyId, 'signed', true);
+    try {
+      const res = await documentApi.resendSignedCopy(id, partyId);
+      showToast(res.data?.message || 'Signed PDF sent.', 'success');
+    } catch (err) {
+      showToast(err?.message || 'Could not send signed copy.', 'error');
+    } finally {
+      setResendBusy(partyId, 'signed', false);
+    }
+  }, [id, showToast, setResendBusy]);
+
+  const handleReuseSuccess = useCallback((newDoc) => {
+    if (newDoc?._id) navigate(`/documents/${newDoc._id}`);
+  }, [navigate]);
 
   // ── Delete ────────────────────────────────────────────────────
   const handleDelete = useCallback(async () => {
@@ -708,6 +786,21 @@ export default function DocumentDetail() {
             >
               <Ic.Refresh />
             </button>
+            {doc?.status && doc.status !== 'draft' && (
+              <button
+                onClick={() => setShowReuse(true)}
+                className="h-9 px-4 rounded-xl border border-slate-200
+                           dark:border-slate-700 bg-white dark:bg-slate-900
+                           text-sm font-semibold text-slate-600 dark:text-slate-300
+                           flex items-center gap-2
+                           hover:border-[#28ABDF] hover:text-[#28ABDF]
+                           transition-colors shadow-sm"
+                title="Reuse with new signers"
+              >
+                <Ic.Reuse />
+                <span className="hidden sm:inline">Reuse</span>
+              </button>
+            )}
             {doc?.fileUrl && (
               <a
                 href={doc.fileUrl}
@@ -929,8 +1022,20 @@ export default function DocumentDetail() {
         {/* TAB: SIGNERS */}
         {activeTab === 'signers' && (
           <div className="space-y-3">
-            {(doc?.parties || []).map((party, i) => (
-              <div key={i}
+            {(doc?.parties || []).map((party, i) => {
+              const partyId = party._id;
+              const isCurrentSigner = doc.status === 'in_progress'
+                && i === (doc.currentPartyIndex ?? 0)
+                && party.status !== 'signed';
+              const canResendSign = isCurrentSigner && !!partyId;
+              const canResendSigned = doc.status === 'completed'
+                && party.status === 'signed'
+                && !!partyId;
+              const resendingSign = resendState[`${partyId}:sign`];
+              const resendingCopy = resendState[`${partyId}:signed`];
+
+              return (
+              <div key={partyId || i}
                    className="bg-white dark:bg-slate-900 rounded-2xl
                               border border-slate-100 dark:border-slate-800
                               shadow-sm p-5">
@@ -947,6 +1052,9 @@ export default function DocumentDetail() {
                     <div>
                       <p className="text-sm font-bold text-slate-800 dark:text-white">
                         {party.name}
+                        <span className="ml-2 text-[10px] font-semibold text-slate-400">
+                          Party {i + 1}
+                        </span>
                       </p>
                       <p className="text-xs text-slate-400">{party.email}</p>
                       {party.designation && (
@@ -954,7 +1062,41 @@ export default function DocumentDetail() {
                       )}
                     </div>
                   </div>
-                  <StatusBadge status={party.status === 'signed' ? 'completed' : party.status} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusBadge status={party.status === 'signed' ? 'completed' : party.status} />
+                    {canResendSign && (
+                      <button
+                        type="button"
+                        onClick={() => handleResendSigning(partyId)}
+                        disabled={resendingSign}
+                        className="h-8 px-3 rounded-lg border border-slate-200
+                                   dark:border-slate-700 text-xs font-semibold
+                                   text-slate-600 dark:text-slate-300
+                                   hover:border-[#28ABDF] hover:text-[#28ABDF]
+                                   disabled:opacity-50 flex items-center gap-1.5"
+                        title="Resend signing email"
+                      >
+                        {resendingSign ? <Ic.Spinner /> : <Ic.Mail />}
+                        Resend
+                      </button>
+                    )}
+                    {canResendSigned && (
+                      <button
+                        type="button"
+                        onClick={() => handleResendSigned(partyId)}
+                        disabled={resendingCopy}
+                        className="h-8 px-3 rounded-lg border border-emerald-200
+                                   dark:border-emerald-800 text-xs font-semibold
+                                   text-emerald-700 dark:text-emerald-400
+                                   hover:bg-emerald-50 dark:hover:bg-emerald-900/20
+                                   disabled:opacity-50 flex items-center gap-1.5"
+                        title="Resend signed PDF"
+                      >
+                        {resendingCopy ? <Ic.Spinner /> : <Ic.Download />}
+                        Signed PDF
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {party.signedAt && (
@@ -981,7 +1123,8 @@ export default function DocumentDetail() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {!doc?.parties?.length && (
               <div className="py-16 text-center bg-white dark:bg-slate-900
@@ -1065,6 +1208,13 @@ export default function DocumentDetail() {
         )}
 
       </div>
+
+      <ReuseDocumentModal
+        document={doc}
+        open={showReuse}
+        onClose={() => setShowReuse(false)}
+        onSuccess={handleReuseSuccess}
+      />
     </div>
   );
 }
