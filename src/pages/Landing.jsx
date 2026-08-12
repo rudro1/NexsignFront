@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
+import NexSignLogo from '@/components/ui/Logo';
 import {
   FileSignature, Zap, Shield, Users, CheckCircle,
   ArrowRight, Star, Globe, Lock, Clock, ChevronDown,
@@ -196,14 +197,7 @@ function Navbar() {
           <div className="flex items-center justify-between h-16 lg:h-18">
 
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
-              <div className="w-9 h-9 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/30 group-hover:shadow-sky-500/50 transition-shadow">
-                <FileSignature className="w-4.5 h-4.5 text-white" size={18} />
-              </div>
-              <span className="font-extrabold text-xl text-slate-900 dark:text-white tracking-tight">
-                NeX<span className="text-sky-500">sign</span>
-              </span>
-            </Link>
+            <NexSignLogo size="md" />
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-0.5">
@@ -819,14 +813,9 @@ function Footer() {
 
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <Link to="/" className="flex items-center gap-2.5 mb-4 group">
-              <div className="w-9 h-9 bg-sky-500 rounded-xl flex items-center justify-center group-hover:bg-sky-400 transition-colors">
-                <FileSignature size={18} className="text-white" />
-              </div>
-              <span className="font-extrabold text-lg text-white">
-                NeX<span className="text-sky-400">sign</span>
-              </span>
-            </Link>
+            <div className="mb-4">
+              <NexSignLogo size="md" tone="light" />
+            </div>
             <p className="text-slate-400 text-sm leading-relaxed mb-5">
               The fastest way to get documents signed. Secure, legal, and beautifully simple.
             </p>

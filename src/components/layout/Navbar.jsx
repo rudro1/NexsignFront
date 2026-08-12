@@ -6,10 +6,11 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Moon, Sun, Menu, X, LogOut,
   LayoutDashboard, ShieldCheck, LayoutTemplate,
-  ChevronDown, FileSignature, Settings, User,
+  ChevronDown, Settings, User,
   Bell, FileText,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
+import NexSignLogo from '@/components/ui/Logo';
 
 // ─── cn helper ────────────────────────────────────────────────────
 const cn = (...c) => c.filter(Boolean).join(' ');
@@ -24,25 +25,10 @@ const getInitials = (name) =>
     .toUpperCase();
 
 // ════════════════════════════════════════════════════════════════
-// LOGO
+// LOGO — shared NexSign mark (email + site)
 // ════════════════════════════════════════════════════════════════
 function Logo() {
-  return (
-    <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
-      <div className={cn(
-        'w-9 h-9 bg-gradient-to-br from-sky-400 to-sky-600',
-        'rounded-xl flex items-center justify-center',
-        'shadow-md shadow-sky-500/30',
-        'group-hover:shadow-sky-500/50 group-hover:scale-105',
-        'transition-all duration-200',
-      )}>
-        <FileSignature size={17} className="text-white" />
-      </div>
-      <span className="font-extrabold text-xl text-slate-900 dark:text-white tracking-tight">
-        NeX<span className="text-sky-500">sign</span>
-      </span>
-    </Link>
-  );
+  return <NexSignLogo size="md" />;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -121,7 +107,7 @@ function UserMenu({ user, onLogout, isAdmin }) {
   const MENU_ITEMS = [
     { icon: LayoutDashboard, label: 'Dashboard',   to: isAdmin ? '/admin'     : '/dashboard' },
     { icon: FileText,        label: 'Documents',   to: '/dashboard',  hide: isAdmin },
-    { icon: LayoutTemplate,  label: 'Templates',   to: '/templates',  hide: isAdmin },
+    { icon: LayoutTemplate,  label: 'Templates',   to: '/templates' },
     { icon: Settings,        label: 'Settings',    to: '/settings'   },
   ].filter(i => !i.hide);
 
@@ -425,14 +411,19 @@ export default function Navbar() {
                   <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />
 
                   {isAdmin ? (
-                    <NavLink
-                      to="/admin"
-                      active={isActive('/admin')}
-                      icon={ShieldCheck}
-                      variant="admin"
-                    >
-                      Admin
-                    </NavLink>
+                    <>
+                      <NavLink
+                        to="/admin"
+                        active={isActive('/admin')}
+                        icon={ShieldCheck}
+                        variant="admin"
+                      >
+                        Admin
+                      </NavLink>
+                      <NavLink to="/templates" active={isActive('/templates')} icon={LayoutTemplate}>
+                        Templates
+                      </NavLink>
+                    </>
                   ) : (
                     <>
                       <NavLink to="/dashboard" active={isActive('/dashboard')} icon={LayoutDashboard}>
@@ -536,15 +527,25 @@ export default function Navbar() {
                 <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 
                 {isAdmin ? (
-                  <MobileNavLink
-                    to="/admin"
-                    active={isActive('/admin')}
-                    icon={ShieldCheck}
-                    variant="admin"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    Admin Panel
-                  </MobileNavLink>
+                  <>
+                    <MobileNavLink
+                      to="/admin"
+                      active={isActive('/admin')}
+                      icon={ShieldCheck}
+                      variant="admin"
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      Admin Panel
+                    </MobileNavLink>
+                    <MobileNavLink
+                      to="/templates"
+                      active={isActive('/templates')}
+                      icon={LayoutTemplate}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      Templates
+                    </MobileNavLink>
+                  </>
                 ) : (
                   <>
                     <MobileNavLink to="/dashboard" active={isActive('/dashboard')} icon={LayoutDashboard} onClick={() => setMobileOpen(false)}>

@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
+import NexSignLogo from '@/components/ui/Logo';
 import {
-  Check, X, Zap, Shield, Users, FileSignature,
+  Check, X, Zap, Shield, Users,
   ArrowRight, Lock, Star, ChevronDown, Sparkles,
   Building2, User, Crown, HelpCircle,
 } from 'lucide-react';
@@ -136,7 +137,7 @@ const TRUST = [
 const C = {
   sky:    { iconBg: 'bg-sky-100 dark:bg-sky-900/40',    iconText: 'text-sky-500',    ring: 'ring-sky-500/20',    btn: 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/25'    },
   violet: { iconBg: 'bg-violet-100 dark:bg-violet-900/40', iconText: 'text-violet-500', ring: 'ring-violet-500/20', btn: 'bg-violet-500 hover:bg-violet-600 text-white shadow-lg shadow-violet-500/25' },
-  slate:  { iconBg: 'bg-slate-100 dark:bg-slate-800',   iconText: 'text-slate-500',  ring: 'ring-slate-200/60',  btn: 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700' },
+  slate:  { iconBg: 'bg-slate-100 dark:bg-slate-700/80', iconText: 'text-slate-600 dark:text-slate-300', ring: 'ring-slate-200/60', btn: 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600' },
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -203,14 +204,7 @@ export default function Pricing() {
       {/* ── Simple top nav ──────────────────────────────────────── */}
       <div className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 bg-sky-500 rounded-xl flex items-center justify-center">
-              <FileSignature size={16} className="text-white" />
-            </div>
-            <span className="font-extrabold text-lg text-slate-900 dark:text-white">
-              NeX<span className="text-sky-500">sign</span>
-            </span>
-          </Link>
+          <NexSignLogo size="sm" />
           <div className="flex items-center gap-2.5">
             {user ? (
               <Btn
@@ -333,17 +327,17 @@ export default function Pricing() {
                       'relative flex flex-col rounded-3xl border transition-all duration-300',
                       plan.highlight
                         ? [
-                            'bg-white dark:bg-slate-800/80',
-                            'border-sky-300 dark:border-sky-600',
+                            'bg-white dark:bg-slate-800',
+                            'border-sky-300 dark:border-sky-500',
                             'shadow-2xl shadow-sky-500/15 dark:shadow-sky-900/30',
                             'md:scale-[1.04] md:z-10',
                             'ring-1 ring-sky-300 dark:ring-sky-600',
                           ]
                         : [
-                            'bg-white dark:bg-slate-900/60',
-                            'border-slate-200 dark:border-slate-800',
-                            'hover:border-slate-300 dark:hover:border-slate-700',
-                            'hover:shadow-lg hover:shadow-slate-200/60 dark:hover:shadow-slate-900/40',
+                            'bg-white dark:bg-slate-800',
+                            'border-slate-200 dark:border-slate-700',
+                            'hover:border-slate-300 dark:hover:border-slate-600',
+                            'hover:shadow-lg hover:shadow-slate-200/60 dark:hover:shadow-black/30',
                           ],
                     )}
                   >
@@ -384,7 +378,7 @@ export default function Pricing() {
                             </motion.span>
                           </AnimatePresence>
                           <div className="pb-1">
-                            <span className="text-sm text-slate-400 font-medium">/mo</span>
+                            <span className="text-sm text-slate-400 dark:text-slate-400 font-medium">/mo</span>
                             {yearly && price > 0 && (
                               <p className="text-[10px] text-emerald-500 font-bold leading-tight">Billed annually</p>
                             )}
@@ -408,8 +402,8 @@ export default function Pricing() {
                             <span className={cn(
                               'text-sm leading-snug',
                               f.included
-                                ? 'text-slate-700 dark:text-slate-300 font-medium'
-                                : 'text-slate-400 dark:text-slate-600 line-through',
+                                ? 'text-slate-700 dark:text-slate-200 font-medium'
+                                : 'text-slate-400 dark:text-slate-500 line-through',
                             )}>
                               {f.text}
                             </span>
@@ -589,12 +583,7 @@ export default function Pricing() {
       {/* ── Footer ────────────────────────────────────────────── */}
       <footer className="bg-slate-950 border-t border-slate-800 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-sky-500 rounded-lg flex items-center justify-center">
-              <FileSignature size={14} className="text-white" />
-            </div>
-            <span className="font-extrabold text-white">NeX<span className="text-sky-400">sign</span></span>
-          </Link>
+          <NexSignLogo size="sm" tone="light" />
           <p className="text-slate-500 text-sm">© {new Date().getFullYear()} NexSign. All rights reserved.</p>
           <div className="flex gap-4 text-xs text-slate-600">
             <Link to="#" className="hover:text-slate-400 transition-colors">Privacy</Link>

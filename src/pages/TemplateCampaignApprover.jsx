@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Loader2, CheckCircle2, Shield, FileText, Crown, ExternalLink, Users,
+  PenLine, Type, CheckSquare, Calendar, Hash,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,62 @@ function fmtDate(d) {
   } catch {
     return '';
   }
+}
+
+const FIELD_ICONS = {
+  signature: PenLine,
+  initial:   PenLine,
+  text:      Type,
+  number:    Hash,
+  date:      Calendar,
+  checkbox:  CheckSquare,
+};
+
+function FieldReviewList({ fields = [] }) {
+  if (!fields.length) return null;
+
+  const bossFields     = fields.filter(f => f.assignedTo === 'boss' || !f.assignedTo);
+  const employeeFields = fields.filter(f => f.assignedTo === 'employee');
+
+  const renderGroup = (title, items, accent, role) => (
+    <div className="space-y-2">
+      <p className={`text-xs font-bold uppercase tracking-wide ${accent}`}>{title}</p>
+      <ul className="space-y-1.5">
+        {items.map(f => {
+          const Icon = FIELD_ICONS[f.type] || Type;
+          const filled = !!f.value;
+          return (
+            <li key={f.id}
+              className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+              <Icon className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+              <span className="flex-1 min-w-0 truncate">
+                {f.label || f.type}
+                <span className="text-slate-400"> · page {f.page || 1}</span>
+              </span>
+              {filled ? (
+                <span className="text-emerald-600 font-semibold shrink-0">Filled</span>
+              ) : (
+                <span className="text-sky-600 font-medium shrink-0">
+                  {role === 'boss' ? 'Authoriser area' : 'Employee area'}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white p-4 space-y-4">
+      <p className="text-sm font-semibold text-slate-700">Field checklist</p>
+      <p className="text-xs text-slate-500 -mt-2">
+        Blue boxes in the PDF show where each employee will sign or write. Authoriser fields are embedded in the document.
+      </p>
+      {bossFields.length > 0 && renderGroup('Authoriser fields', bossFields, 'text-amber-700', 'boss')}
+      {employeeFields.length > 0 && renderGroup('Employee fields (sign / text / date)', employeeFields, 'text-sky-700', 'employee')}
+    </div>
+  );
 }
 
 export default function TemplateCampaignApprover() {
@@ -76,8 +133,9 @@ export default function TemplateCampaignApprover() {
     );
   }
 
-  const { approver, campaign, pdfUrl } = data;
-  const previewUrl = pdfUrl || publicApiUrl(`/template-campaigns/pdf/${token}`);
+  const { approver, campaign, fields = [] } = data;
+  // Always build from frontend API base — backend pdfUrl may use wrong API_URL env
+  const previewUrl = publicApiUrl(`/template-campaigns/pdf/${token}`);
 
   if (done) {
     return (
@@ -130,8 +188,9 @@ export default function TemplateCampaignApprover() {
                     : ''}
                 </p>
                 <p className="text-xs text-sky-600/70 mt-1">
-                  The PDF below includes the authoriser&apos;s signature and assigned fields.
-                  Review it fully before approving.
+                  The PDF below shows the authoriser signature, any authoriser text fields,
+                  and blue markers for every employee sign / text / date / checkbox field.
+                  Review all of it before approving.
                 </p>
               </div>
             </div>
@@ -153,7 +212,7 @@ export default function TemplateCampaignApprover() {
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              Signed document preview
+              Full document review
             </p>
             <a
               href={previewUrl}
@@ -166,11 +225,12 @@ export default function TemplateCampaignApprover() {
           </div>
 
           <iframe
-            title="Signed document preview"
+            title="Document review preview"
             src={`${previewUrl}#toolbar=1&navpanes=0`}
             className="w-full h-[min(70vh,720px)] rounded-xl border border-slate-200 bg-slate-100"
-            onLoad={() => setReviewed(true)}
           />
+
+          <FieldReviewList fields={fields} />
 
           <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
             <input
@@ -180,7 +240,8 @@ export default function TemplateCampaignApprover() {
               className="mt-1 rounded border-slate-300"
             />
             <span>
-              I have reviewed the authoriser-signed PDF and confirm the details are correct.
+              I have reviewed the authoriser signature, all authoriser fields, and every
+              employee sign / write area on the PDF above.
             </span>
           </label>
 

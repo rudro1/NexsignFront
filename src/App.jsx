@@ -12,7 +12,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { Toaster } from 'sonner';
-import { FileSignature } from 'lucide-react';
+import NexSignLogo from '@/components/ui/Logo';
 import Layout from '@/Layout';
 
 const cn = (...c) => c.filter(Boolean).join(' ');
@@ -87,19 +87,7 @@ function AppLoader() {
     <div className="h-screen flex flex-col items-center 
                     justify-center gap-5 
                     bg-white dark:bg-slate-950">
-      <div className="flex items-center gap-2.5 mb-2">
-        <div className={cn(
-          'w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600',
-          'rounded-xl flex items-center justify-center',
-          'shadow-lg shadow-sky-500/30',
-        )}>
-          <FileSignature size={20} className="text-white" />
-        </div>
-        <span className="font-extrabold text-2xl text-slate-900 
-                         dark:text-white tracking-tight">
-          NeX<span className="text-sky-500">sign</span>
-        </span>
-      </div>
+      <NexSignLogo size="lg" asLink={false} className="mb-2" />
       <div className="relative w-10 h-10">
         <div className="absolute inset-0 rounded-full border-4 
                         border-slate-200 dark:border-slate-800" />

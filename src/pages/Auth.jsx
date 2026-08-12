@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Login    from '@/pages/Login';
 import Register from '@/pages/Register';
-import { FileSignature } from 'lucide-react';
+import NexSignLogo from '@/components/ui/Logo';
 
 export default function Auth({ initialMode = 'login' }) {
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
@@ -92,11 +92,8 @@ export default function Auth({ initialMode = 'login' }) {
             : 'translate-x-full rounded-l-[5rem]'
           }
         `}>
-          {/* Logo */}
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm
-                          rounded-2xl flex items-center justify-center
-                          mb-6 shadow-lg">
-            <FileSignature size={28} className="text-white" />
+          <div className="mb-6">
+            <NexSignLogo size="lg" tone="light" asLink={false} />
           </div>
 
           <div className="space-y-5">

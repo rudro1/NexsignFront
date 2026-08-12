@@ -364,17 +364,14 @@ const FIELD_META = {
 };
 
 function InlineInput({ field, onChange, type = 'text' }) {
-  const ref   = useRef(null);
-  const local = useRef(field.value || '');
   return (
-    <input ref={ref} type={type}
-      defaultValue={field.value || ''}
+    <input type={type}
+      value={field.value || ''}
       placeholder={field.placeholder || (type === 'number' ? '0' : 'Type here...')}
       className="absolute inset-0 w-full h-full bg-white/95 px-2
                  text-xs border-none outline-none z-10 text-slate-700"
       onClick={e => e.stopPropagation()}
-      onChange={e => { local.current = e.target.value; }}
-      onBlur={() => { if (local.current !== field.value) onChange(field.id, local.current); }}
+      onChange={e => onChange(field.id, e.target.value)}
     />
   );
 }

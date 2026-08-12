@@ -1303,7 +1303,7 @@ import {
   Shield, Users, Clock, Search, Trash2, Loader2,
   Activity, ChevronLeft, ChevronRight, Calendar, Plus,
   History, FileText, RefreshCw, AlertTriangle, CheckCircle,
-  XCircle, Database, BarChart3, Eye,
+  XCircle, Database, BarChart3, Eye, LayoutTemplate,
 } from 'lucide-react';
 
 // ─── tiny helpers (no shadcn dep) ────────────────────────────────────────────
@@ -1676,6 +1676,13 @@ export default function AdminDashboard() {
                 <RefreshCw size={15} className={cn('text-emerald-500', anyLoading && 'animate-spin')} />
                 Refresh
               </button>
+
+              <Link to="/templates">
+                <button className="flex items-center gap-2 px-5 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-black text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm">
+                  <LayoutTemplate size={15} className="text-violet-500" />
+                  Templates
+                </button>
+              </Link>
 
               <Link to="/document-editor">
                 <button className="flex items-center gap-2 px-6 h-10 rounded-2xl bg-sky-600 hover:bg-sky-700 text-sm font-black text-white transition-colors shadow-lg shadow-sky-500/25">
