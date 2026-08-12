@@ -37,7 +37,7 @@ const FIELD_TYPES = [
     id:    'date',
     label: 'Date',
     icon:  Calendar,
-    desc:  'Auto-fills signing date',
+    desc:  'Fills with signing date (auto on open)',
     color: 'emerald',
   },
   {

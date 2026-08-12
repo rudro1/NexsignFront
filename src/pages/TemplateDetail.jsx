@@ -1026,6 +1026,12 @@ import { templateApi } from '@/api/apiClient';
 import SignaturePad from '@/components/signing/SignaturePad';
 import EmailPreviewModal from '@/components/email/EmailPreviewModal';
 import ReuseTemplateModal from '@/components/templates/ReuseTemplateModal';
+import BossExtraFields from '@/components/signing/BossExtraFields';
+import {
+  initSigningFields,
+  toFieldValues,
+  missingRequiredFields,
+} from '@/utils/signingFields';
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
@@ -1454,17 +1460,35 @@ function BossSignModal({ template, onClose, onSigned }) {
   const mutations = useTemplateMutations();
   const [signing,  setSigning]  = useState(false);
   const [sigData,  setSigData]  = useState(null);
+  const [bossFields, setBossFields] = useState([]);
+
+  useEffect(() => {
+    setBossFields(
+      initSigningFields(
+        (template.fields || []).filter(f => f.assignedTo === 'boss'),
+      ),
+    );
+  }, [template.fields]);
 
   const handleSign = async () => {
     if (!sigData) {
       toast.error('Please draw your signature first.');
       return;
     }
+    const extraMissing = missingRequiredFields(
+      bossFields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
+    );
+    if (extraMissing.length) {
+      toast.error(`Please complete: ${extraMissing.map(f => f.label || f.type).join(', ')}`);
+      return;
+    }
     setSigning(true);
     try {
       const res = await mutations.bossSign(template._id, {
         signatureDataUrl: sigData,
-        fieldValues:      [],
+        fieldValues: toFieldValues(
+          bossFields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
+        ),
       });
 
       if (!res.success) {
@@ -1564,7 +1588,8 @@ function BossSignModal({ template, onClose, onSigned }) {
         </div>
 
         {/* Signature pad */}
-        <div className="px-6 py-5">
+        <div className="px-6 py-5 space-y-4">
+          <BossExtraFields fields={bossFields} onChange={setBossFields} />
           <p className="text-xs font-semibold text-slate-500
                         uppercase tracking-wide mb-3">
             Draw Your Signature

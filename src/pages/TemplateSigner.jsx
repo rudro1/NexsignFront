@@ -2736,6 +2736,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { templateApi } from '@/api/apiClient';
 import { loadPdfDocument } from '@/utils/loadPdfDocument';
+import { initSigningFields, hasRequiredSignature, toFieldValues } from '@/utils/signingFields';
 import { getBrowserGPS, getClientTimezone } from '@/lib/signingGeo';
 
 const cn = (...c) => c.filter(Boolean).join(' ');
@@ -3639,8 +3640,8 @@ export default function TemplateSigner() {
         if (cancelled) return;
         setSessionData(data.session);
         setTemplateData(data.template);
-        // Initialize fields with empty values
-        setFields((data.template.fields || []).map(f => ({ ...f, value: f.value || '' })));
+        // Initialize employee fields; date fields auto-fill to today
+        setFields(initSigningFields(data.template.fields || []));
         setTotalPages(data.template.totalPages || 1);
         // Jump to first page that has fields
         const pages = [...new Set((data.template.fields || []).map(f => f.page || 1))].sort((a, b) => a - b);
@@ -3693,19 +3694,22 @@ export default function TemplateSigner() {
       return;
     }
     const sigField = fields.find(f => (f.type === 'signature' || f.type === 'initial') && f.value);
-    if (!sigField) { toast.error('Please add your signature first.'); return; }
+    if (hasRequiredSignature(fields) && !sigField) {
+      toast.error('Please add your signature first.');
+      return;
+    }
 
     setSubmitting(true);
     try {
       toast.info('Recording secure location for audit trail…', { duration: 2500 });
       const gpsCoords = await getBrowserGPS().catch(() => null);
 
-      const fieldValues = fields.filter(f => f.value).map(f => ({
-        fieldId: f.id, type: f.type, value: f.value,
-      }));
+      const fieldValues = toFieldValues(
+        fields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
+      );
 
       await templateApi.employeeSign(token, {
-        signatureDataUrl: sigField.value,
+        signatureDataUrl: sigField?.value || null,
         fieldValues,
         clientTime: new Date().toISOString(),
         latitude:   gpsCoords?.latitude  ?? null,

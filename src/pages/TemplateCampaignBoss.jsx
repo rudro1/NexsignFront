@@ -4,6 +4,12 @@ import { Loader2, CheckCircle2, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import SignaturePad from '@/components/signing/SignaturePad';
+import BossExtraFields from '@/components/signing/BossExtraFields';
+import {
+  initSigningFields,
+  toFieldValues,
+  missingRequiredFields,
+} from '@/utils/signingFields';
 import { publicGet } from '@/api/apiClient';
 
 const BASE = (
@@ -17,11 +23,15 @@ export default function TemplateCampaignBoss() {
   const [done, setDone] = useState(false);
   const [data, setData] = useState(null);
   const [sigData, setSigData] = useState(null);
+  const [bossFields, setBossFields] = useState([]);
 
   useEffect(() => {
     if (!token) return;
     publicGet(`/template-campaigns/boss/validate/${token}`)
-      .then(res => setData(res.data))
+      .then(res => {
+        setData(res.data);
+        setBossFields(initSigningFields(res.data?.campaign?.fields || []));
+      })
       .catch(err => toast.error(err.message || 'Invalid link'))
       .finally(() => setLoading(false));
   }, [token]);
@@ -31,13 +41,25 @@ export default function TemplateCampaignBoss() {
       toast.error('Please draw your signature.');
       return;
     }
+    const extraMissing = missingRequiredFields(
+      bossFields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
+    );
+    if (extraMissing.length) {
+      toast.error(`Please complete: ${extraMissing.map(f => f.label || f.type).join(', ')}`);
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`${BASE}/template-campaigns/boss/sign/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         credentials: 'omit',
-        body: JSON.stringify({ signatureDataUrl: sigData, fieldValues: [] }),
+        body: JSON.stringify({
+          signatureDataUrl: sigData,
+          fieldValues: toFieldValues(
+            bossFields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
+          ),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Signing failed');
@@ -100,7 +122,8 @@ export default function TemplateCampaignBoss() {
           className="w-full h-64 rounded-xl border bg-white"
         />
 
-        <div className="bg-white rounded-2xl border p-5">
+        <div className="bg-white rounded-2xl border p-5 space-y-4">
+          <BossExtraFields fields={bossFields} onChange={setBossFields} />
           <p className="text-xs font-semibold text-slate-500 mb-3 uppercase">Your signature</p>
           <SignaturePad onChange={setSigData} height={160} />
           <Button
