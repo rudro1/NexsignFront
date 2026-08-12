@@ -75,3 +75,16 @@
   transform: scale(1.02);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
+
+/* White form inputs stay readable when the app is in dark mode */
+.signing-field-input {
+  background-color: #ffffff;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #0f172a;
+  color-scheme: light;
+}
+.signing-field-input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
