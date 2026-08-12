@@ -1542,20 +1542,23 @@ function BossSignModal({ template, onClose, onSigned }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg rounded-2xl p-0 overflow-hidden
-                                border border-slate-100 dark:border-slate-800">
-
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-slate-100
+      <DialogContent
+        className="flex flex-col max-w-lg w-[calc(100vw-1.5rem)] sm:w-full
+                   max-h-[92dvh] rounded-2xl p-0 overflow-hidden
+                   border border-slate-100 dark:border-slate-800
+                   top-[3vh] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]"
+      >
+        {/* Header — fixed at top */}
+        <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-100
                         dark:border-slate-800 bg-gradient-to-r
                         from-amber-50 to-orange-50
                         dark:from-amber-900/20 dark:to-orange-900/10">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-2 pr-8">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10
-                            flex items-center justify-center">
+                            flex items-center justify-center shrink-0">
               <Crown className="w-5 h-5 text-amber-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <DialogTitle className="text-base font-bold text-slate-800
                                        dark:text-white">
                 Sign as Authoriser
@@ -1583,21 +1586,25 @@ function BossSignModal({ template, onClose, onSigned }) {
           </div>
         </div>
 
-        {/* Signature pad */}
-        <div className="px-6 py-5 space-y-4">
+        {/* Scrollable body */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
           <BossExtraFields fields={bossFields} onChange={setBossFields} />
-          <p className="text-xs font-semibold text-slate-500
-                        uppercase tracking-wide mb-3">
-            Draw Your Signature
-          </p>
-          <SignaturePad
-            onChange={setSigData}
-            height={180}
-          />
+          <div>
+            <p className="text-xs font-semibold text-slate-500
+                          uppercase tracking-wide mb-3">
+              Draw Your Signature
+            </p>
+            <SignaturePad
+              onChange={setSigData}
+              height={140}
+            />
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 pb-6 flex gap-3">
+        {/* Footer — always visible */}
+        <div className="shrink-0 px-6 py-4 border-t border-slate-100
+                        dark:border-slate-800 bg-white dark:bg-slate-900
+                        flex gap-3">
           <Button
             variant="outline"
             onClick={onClose}
