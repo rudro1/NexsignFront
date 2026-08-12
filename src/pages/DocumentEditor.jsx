@@ -387,6 +387,8 @@ export default function DocumentEditor() {
       }
     } catch (err) {
       console.error('[pdf upload]', err);
+      const msg = err?.message || err?.response?.data?.message || 'PDF upload failed.';
+      toast.error(msg);
     } finally {
       if (mountedRef.current) setUploadingPdf(false);
     }
@@ -569,8 +571,8 @@ export default function DocumentEditor() {
       navigate('/dashboard');
 
     } catch (err) {
-      const msg = err?.response?.data?.message
-        || err?.message
+      const msg = err?.message
+        || err?.response?.data?.message
         || 'Failed to send document.';
       toast.error(msg);
     } finally {
@@ -972,7 +974,7 @@ export default function DocumentEditor() {
                     <div className="flex items-center gap-3">
                       <input
                         type="color"
-                        value={emailHeaderColor}
+                        value={/^#[0-9A-Fa-f]{6}$/.test(emailHeaderColor) ? emailHeaderColor : '#0f172a'}
                         onChange={e => setEmailHeaderColor(e.target.value)}
                         className="h-10 w-14 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer bg-white"
                       />
