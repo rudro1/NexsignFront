@@ -13,6 +13,10 @@
         {
           "key": "Cross-Origin-Embedder-Policy",
           "value": "unsafe-none"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "unload=(self)"
         }
       ]
     }

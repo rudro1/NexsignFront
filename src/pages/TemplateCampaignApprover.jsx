@@ -7,6 +7,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { publicGet, publicApiUrl } from '@/api/apiClient';
+import PdfCanvasPreview from '@/components/pdf/PdfCanvasPreview';
 
 function fmtDate(d) {
   if (!d) return '';
@@ -224,10 +225,11 @@ export default function TemplateCampaignApprover() {
             </a>
           </div>
 
-          <iframe
-            title="Document review preview"
-            src={`${previewUrl}#toolbar=1&navpanes=0`}
-            className="w-full h-[min(70vh,720px)] rounded-xl border border-slate-200 bg-slate-100"
+          <PdfCanvasPreview
+            source={previewUrl}
+            height={520}
+            showPager
+            className="rounded-xl border border-slate-200 overflow-hidden"
           />
 
           <FieldReviewList fields={fields} />

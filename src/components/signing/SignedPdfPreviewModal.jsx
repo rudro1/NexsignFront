@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import PdfCanvasPreview from '@/components/pdf/PdfCanvasPreview';
 
 /**
  * In-app PDF preview (signed document + audit page).
@@ -122,10 +123,11 @@ export default function SignedPdfPreviewModal({
             </div>
           )}
           {!loading && !error && pdfUrl && (
-            <iframe
-              title={title}
-              src={`${pdfUrl}#toolbar=1&navpanes=0`}
-              className="w-full h-full border-0 bg-white"
+            <PdfCanvasPreview
+              source={pdfUrl}
+              height={560}
+              showPager
+              className="h-full"
             />
           )}
         </div>

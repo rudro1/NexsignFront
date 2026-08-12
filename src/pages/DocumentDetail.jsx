@@ -6,6 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, documentApi } from '@/api/apiClient';
 import useSocket from '@/hooks/useSocket';
 import ReuseDocumentModal from '@/components/documents/ReuseDocumentModal';
+import PdfCanvasPreview from '@/components/pdf/PdfCanvasPreview';
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -947,11 +948,10 @@ export default function DocumentDetail() {
                                   border-slate-200 dark:border-slate-700
                                   bg-slate-100 dark:bg-slate-950 min-h-[200px]">
                     {previewPdfUrl ? (
-                      <iframe
-                        src={`${previewPdfUrl}#toolbar=0&navpanes=0`}
-                        className="w-full border-0 block"
-                        style={{ height: '400px' }}
-                        title="Document preview"
+                      <PdfCanvasPreview
+                        source={previewPdfUrl}
+                        height={400}
+                        showPager
                       />
                     ) : previewPdfError ? (
                       <div className="p-6 text-center text-sm text-red-600">

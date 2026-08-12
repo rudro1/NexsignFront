@@ -11,6 +11,7 @@ import {
   missingRequiredFields,
 } from '@/utils/signingFields';
 import { publicGet } from '@/api/apiClient';
+import PdfCanvasPreview from '@/components/pdf/PdfCanvasPreview';
 
 const BASE = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api'
@@ -116,10 +117,11 @@ export default function TemplateCampaignBoss() {
           <p className="text-sm text-slate-500 mt-1">{campaign.title}</p>
         </div>
 
-        <iframe
-          title="PDF"
-          src={`${pdfUrl}#toolbar=0`}
-          className="w-full h-64 rounded-xl border bg-white"
+        <PdfCanvasPreview
+          source={pdfUrl}
+          height={256}
+          showPager={false}
+          className="rounded-xl border overflow-hidden"
         />
 
         <div className="bg-white rounded-2xl border p-5 space-y-4">
