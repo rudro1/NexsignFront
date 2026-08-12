@@ -133,11 +133,15 @@ const TRUST = [
   { icon: Zap,    text: '99.9% Uptime'     },
 ];
 
+// Pricing cards stay light in both themes so text must stay dark (readable on white).
+const PRICING_CARD_BASE =
+  'bg-white text-slate-900 border-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-black/25';
+
 // color tokens
 const C = {
-  sky:    { iconBg: 'bg-sky-100 dark:bg-sky-900/40',    iconText: 'text-sky-500',    ring: 'ring-sky-500/20',    btn: 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/25'    },
-  violet: { iconBg: 'bg-violet-100 dark:bg-violet-900/40', iconText: 'text-violet-500', ring: 'ring-violet-500/20', btn: 'bg-violet-500 hover:bg-violet-600 text-white shadow-lg shadow-violet-500/25' },
-  slate:  { iconBg: 'bg-slate-100 dark:bg-slate-700/80', iconText: 'text-slate-600 dark:text-slate-300', ring: 'ring-slate-200/60', btn: 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600' },
+  sky:    { iconBg: 'bg-sky-100',    iconText: 'text-sky-600',    ring: 'ring-sky-500/20',    btn: 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/25' },
+  violet: { iconBg: 'bg-violet-100', iconText: 'text-violet-600', ring: 'ring-violet-500/20', btn: 'bg-violet-500 hover:bg-violet-600 text-white shadow-lg shadow-violet-500/25' },
+  slate:  { iconBg: 'bg-slate-100',  iconText: 'text-slate-600',  ring: 'ring-slate-200/60',  btn: 'bg-slate-900 hover:bg-slate-800 text-white border border-slate-900' },
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -325,19 +329,17 @@ export default function Pricing() {
                     transition={{ delay: i * 0.12, duration: 0.5 }}
                     className={cn(
                       'relative flex flex-col rounded-3xl border transition-all duration-300',
+                      PRICING_CARD_BASE,
                       plan.highlight
                         ? [
-                            'bg-white dark:bg-slate-800',
-                            'border-sky-300 dark:border-sky-500',
+                            'border-sky-300 dark:border-sky-400',
                             'shadow-2xl shadow-sky-500/15 dark:shadow-sky-900/30',
                             'md:scale-[1.04] md:z-10',
-                            'ring-1 ring-sky-300 dark:ring-sky-600',
+                            'ring-1 ring-sky-300 dark:ring-sky-400',
                           ]
                         : [
-                            'bg-white dark:bg-slate-800',
-                            'border-slate-200 dark:border-slate-700',
-                            'hover:border-slate-300 dark:hover:border-slate-600',
-                            'hover:shadow-lg hover:shadow-slate-200/60 dark:hover:shadow-black/30',
+                            'hover:border-slate-300',
+                            'hover:shadow-xl',
                           ],
                     )}
                   >
@@ -357,30 +359,21 @@ export default function Pricing() {
                           <PlanIcon size={20} className={color.iconText} />
                         </div>
                         <div>
-                          <h3 className="font-extrabold text-slate-900 dark:text-white leading-tight">{plan.name}</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{plan.desc}</p>
+                          <h3 className="font-extrabold text-slate-900 leading-tight">{plan.name}</h3>
+                          <p className="text-xs text-slate-500 leading-tight mt-0.5">{plan.desc}</p>
                         </div>
                       </div>
 
                       {/* Price */}
                       <div className="mb-7">
                         <div className="flex items-end gap-1.5">
-                          <AnimatePresence mode="wait">
-                            <motion.span
-                              key={price}
-                              initial={{ opacity: 0, y: -8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 8 }}
-                              transition={{ duration: 0.2 }}
-                              className="text-5xl font-extrabold text-slate-900 dark:text-white tabular-nums leading-none"
-                            >
-                              ${price}
-                            </motion.span>
-                          </AnimatePresence>
+                          <span className="text-5xl font-extrabold text-slate-900 tabular-nums leading-none">
+                            ${price}
+                          </span>
                           <div className="pb-1">
-                            <span className="text-sm text-slate-400 dark:text-slate-400 font-medium">/mo</span>
+                            <span className="text-sm text-slate-500 font-medium">/mo</span>
                             {yearly && price > 0 && (
-                              <p className="text-[10px] text-emerald-500 font-bold leading-tight">Billed annually</p>
+                              <p className="text-[10px] text-emerald-600 font-bold leading-tight">Billed annually</p>
                             )}
                           </div>
                         </div>
@@ -391,19 +384,19 @@ export default function Pricing() {
                         {plan.features.map((f, j) => (
                           <li key={j} className="flex items-center gap-3">
                             {f.included ? (
-                              <div className="w-5 h-5 bg-sky-100 dark:bg-sky-900/40 rounded-full flex items-center justify-center flex-shrink-0">
-                                <Check size={11} className="text-sky-600 dark:text-sky-400" strokeWidth={3} />
+                              <div className="w-5 h-5 bg-sky-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <Check size={11} className="text-sky-600" strokeWidth={3} />
                               </div>
                             ) : (
-                              <div className="w-5 h-5 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center flex-shrink-0">
+                              <div className="w-5 h-5 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
                                 <X size={11} className="text-slate-400" strokeWidth={3} />
                               </div>
                             )}
                             <span className={cn(
                               'text-sm leading-snug',
                               f.included
-                                ? 'text-slate-700 dark:text-slate-200 font-medium'
-                                : 'text-slate-400 dark:text-slate-500 line-through',
+                                ? 'text-slate-700 font-medium'
+                                : 'text-slate-400 line-through',
                             )}>
                               {f.text}
                             </span>
