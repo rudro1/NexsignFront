@@ -274,7 +274,13 @@ export default function PdfViewer({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      try {
+        pdfDocRef.current?.destroy?.();
+      } catch { /* ignore */ }
+      pdfDocRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileUrl, localFileKey, loadKey]);
 

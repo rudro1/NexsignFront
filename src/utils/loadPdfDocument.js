@@ -3,16 +3,15 @@ import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
-function openPdfData(data) {
+function openPdfFromData(data) {
   return pdfjsLib.getDocument({
     data,
     cMapPacked: true,
-    disableRange: true,
   }).promise;
 }
 
 /**
- * Load PDF from File/Blob (instant local preview) or URL string.
+ * Load PDF from File/Blob (local preview) or URL (HTTP range requests when supported).
  */
 export async function loadPdfDocument(source, { onProgress, timeoutMs = 35_000 } = {}) {
   if (!source) throw new Error('PDF source is missing');
@@ -20,25 +19,27 @@ export async function loadPdfDocument(source, { onProgress, timeoutMs = 35_000 }
   if (source instanceof Blob) {
     const data = await source.arrayBuffer();
     onProgress?.({ loaded: data.byteLength, total: data.byteLength });
-    return openPdfData(data);
+    return openPdfFromData(data);
   }
 
   const url = String(source);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const loadingTask = pdfjsLib.getDocument({
+    url,
+    cMapPacked:   true,
+    disableRange: false,
+    withCredentials: false,
+  });
+
+  if (onProgress) {
+    loadingTask.onProgress = onProgress;
+  }
+
+  const timer = setTimeout(() => {
+    try { loadingTask.destroy(); } catch { /* ignore */ }
+  }, timeoutMs);
 
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      credentials: 'omit',
-      mode: 'cors',
-    });
-
-    if (!res.ok) throw new Error(`PDF fetch failed (${res.status})`);
-
-    const data = await res.arrayBuffer();
-    onProgress?.({ loaded: data.byteLength, total: data.byteLength });
-    return openPdfData(data);
+    return await loadingTask.promise;
   } catch (err) {
     if (err?.name === 'AbortError') throw new Error('PDF_TIMEOUT');
     throw err;

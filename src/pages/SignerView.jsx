@@ -1047,7 +1047,7 @@ export default function SignerView() {
     } catch (err) {
       toast.dismiss(gpsToast);
       if (mountedRef.current) {
-        toast.error(err.response?.data?.message || 'Submission failed. Try again.');
+        toast.error(err?.message || err?.response?.data?.message || 'Submission failed. Try again.');
       }
     } finally {
       if (mountedRef.current) setSubmitting(false);

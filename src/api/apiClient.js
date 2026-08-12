@@ -245,21 +245,7 @@ api.interceptors.response.use(
           `🔁 Retry ${config.__retryCount}/${MAX_RETRIES}: ${config.url}`,
         );
 
-        // Stale cache hit → GET এ সাথে সাথে return
-        const cached = requestCache.get(key);
-        if (cached && config.method?.toLowerCase() === 'get') {
-          setTimeout(
-            () => api(config).catch(() => {}),
-            RETRY_DELAY_MS,
-          );
-          return Promise.resolve({
-            data:        cached.data,
-            status:      200,
-            __fromCache: true,
-            __stale:     true,
-          });
-        }
-
+        // Retry without stale cache (avoids showing outdated dashboard/signing state)
         await sleep(RETRY_DELAY_MS);
         return api(config);
       }
@@ -586,29 +572,45 @@ export { publicApiUrl };
 /** Public GET without cookies — avoids CORS issues on signing pages */
 export async function publicGet(path, options = {}) {
   const url = publicApiUrl(path);
-  const res = await fetch(url, {
-    method:      'GET',
-    credentials: 'omit',
-    headers:     { Accept: 'application/json', ...(options.headers || {}) },
-    signal:      options.signal,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs || 25_000);
 
-  let data = {};
   try {
-    data = await res.json();
-  } catch {
-    data = {};
-  }
+    const res = await fetch(url, {
+      method:      'GET',
+      credentials: 'omit',
+      headers:     { Accept: 'application/json', ...(options.headers || {}) },
+      signal:      options.signal || controller.signal,
+    });
 
-  if (!res.ok) {
-    throw {
-      message:  data?.message || `Server error (${res.status})`,
-      status:   res.status,
-      response: { status: res.status, data },
-    };
-  }
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
 
-  return { data, status: res.status };
+    if (!res.ok) {
+      throw {
+        message:  data?.message || `Server error (${res.status})`,
+        status:   res.status,
+        response: { status: res.status, data },
+      };
+    }
+
+    return { data, status: res.status };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw {
+        message:  'Request timed out. Please try again.',
+        status:   0,
+        response: { status: 0, data: {} },
+      };
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function buildProxyUrl(cloudinaryUrl, docId = null) {
