@@ -2,14 +2,21 @@
 import axios from 'axios';
 
 // ═══════════════════════════════════════════════════════════════
-// CONFIG
+// CONFIG — always ends with /api (fixes Vercel env missing /api)
 // ═══════════════════════════════════════════════════════════════
-const BASE = (
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.PROD
+function normalizeApiBase(raw) {
+  const fallback = import.meta.env.PROD
     ? 'https://nexsignbackendrepo.vercel.app/api'
-    : 'http://localhost:5001/api')
-).replace(/\/$/, '');
+    : 'http://localhost:5001/api';
+
+  let base = String(raw || fallback).trim().replace(/\/$/, '');
+  if (!base.endsWith('/api')) {
+    base = `${base}/api`;
+  }
+  return base;
+}
+
+const BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
 
 const TIMEOUT_NORMAL = 20_000;  // 20s
 const TIMEOUT_UPLOAD = 90_000;  // 90s
