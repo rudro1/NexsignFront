@@ -244,9 +244,9 @@ export function useTemplateSession(token, { enabled = true } = {}) {
     setCode(null);
 
     try {
-      const res = await templateApi.validateEmployeeToken(token);
-      setSession(res.data.session   || null);
-      setTemplate(res.data.template || null);
+      const data = await templateApi.validateEmployeeToken(token);
+      setSession(data.session   || null);
+      setTemplate(data.template || null);
     } catch (err) {
       setError(err.message || 'Invalid or expired signing link.');
       setCode(err.code     || null);

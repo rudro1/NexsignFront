@@ -963,8 +963,14 @@ function FieldProgress({ fields, signerIndex }) {
 // MAIN — SignerView
 // ════════════════════════════════════════════════════
 export default function SignerView() {
-  const { token } = useParams();
+  const { slug, signCode, token } = useParams();
   const navigate  = useNavigate();
+
+  const signingRef = useMemo(() => {
+    if (slug && signCode) return { slug, signCode };
+    if (token) return { token };
+    return null;
+  }, [slug, signCode, token]);
 
   const [phase,       setPhase]       = useState('loading');
   const [docInfo,     setDocInfo]     = useState(null);
@@ -995,10 +1001,10 @@ export default function SignerView() {
     if (pages[0] && pages[0] !== 1) setCurrentPage(pages[0]);
   }, []);
 
-  // ── Validate token ────────────────────────────────
+  // ── Validate signing link ────────────────────────────────
   useEffect(() => {
-    if (!token) {
-      setErrorMsg('No signing token provided.');
+    if (!signingRef) {
+      setErrorMsg('No signing link provided.');
       setPhase('error');
       return;
     }
@@ -1006,7 +1012,7 @@ export default function SignerView() {
     const ctrl = new AbortController();
     (async () => {
       try {
-        const res = await documentApi.validateToken(token, {
+        const res = await documentApi.validateToken(signingRef, {
           signal: ctrl.signal,
         });
         if (!mountedRef.current) return;
@@ -1021,7 +1027,7 @@ export default function SignerView() {
         setFields(allFields);
         setTotalPages(doc.totalPages || 1);
 
-        setPdfUrl(documentApi.getPdfProxy(token));
+        setPdfUrl(documentApi.getPdfProxy(signingRef));
         setPhase('ready');
         jumpToFirstFieldPage(allFields, party.index);
 
@@ -1036,7 +1042,7 @@ export default function SignerView() {
     })();
 
     return () => ctrl.abort();
-  }, [token, jumpToFirstFieldPage]);
+  }, [signingRef, jumpToFirstFieldPage]);
 
   const handleFieldClick = useCallback((field) => {
     if (field.partyIndex !== signerInfo?.index) {
@@ -1081,7 +1087,8 @@ export default function SignerView() {
       toast.dismiss(gpsToast);
 
       const res = await api.post('/documents/sign/submit', {
-        token, fields,
+        ...(slug && signCode ? { slug, signCode } : { token }),
+        fields,
         clientTime: new Date().toISOString(),
         latitude:   gpsCoords?.latitude  ?? null,
         longitude:  gpsCoords?.longitude ?? null,
@@ -1098,7 +1105,7 @@ export default function SignerView() {
     } finally {
       if (mountedRef.current) setSubmitting(false);
     }
-  }, [fields, signerInfo, token]);
+  }, [fields, signerInfo, slug, signCode, token]);
 
   // ── Phase screens ─────────────────────────────────
   if (phase === 'loading') {

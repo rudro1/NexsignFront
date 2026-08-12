@@ -643,8 +643,12 @@ export default function DocumentDetail() {
 
   // ── Copy signing link ─────────────────────────────────────────
   const copySigningLink = useCallback(async (party) => {
-    if (!party?.signingToken) return;
-    const url = `${window.location.origin}/sign/${party.signingToken}`;
+    const url = doc?.publicSlug && party?.signCode
+      ? `${window.location.origin}/sign/${doc.publicSlug}/${party.signCode}`
+      : party?.token
+        ? `${window.location.origin}/sign/${party.token}`
+        : null;
+    if (!url) return;
     setCopying(true);
     try {
       await navigator.clipboard.writeText(url);
@@ -654,7 +658,25 @@ export default function DocumentDetail() {
     } finally {
       setTimeout(() => setCopying(false), 1000);
     }
-  }, [showToast]);
+  }, [doc?.publicSlug, showToast]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!doc?._id) return;
+    try {
+      const wantSigned = doc.status === 'completed';
+      const res = await documentApi.fetchDocumentPdfBlob(doc._id, wantSigned);
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(doc.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err?.message || 'Download failed.', 'error');
+    }
+  }, [doc?._id, doc?.status, doc?.title, showToast]);
 
   // ── Progress ──────────────────────────────────────────────────
   const progress = useMemo(() => {
@@ -801,11 +823,10 @@ export default function DocumentDetail() {
                 <span className="hidden sm:inline">Reuse</span>
               </button>
             )}
-            {doc?.fileUrl && (
-              <a
-                href={doc.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+            {doc?._id && (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
                 className="h-9 px-4 rounded-xl border border-slate-200
                            dark:border-slate-700 bg-white dark:bg-slate-900
                            text-sm font-semibold text-slate-600 dark:text-slate-300
@@ -815,7 +836,7 @@ export default function DocumentDetail() {
               >
                 <Ic.Download />
                 <span className="hidden sm:inline">Download</span>
-              </a>
+              </button>
             )}
             <button
               onClick={() => setShowDelete(true)}
@@ -910,7 +931,7 @@ export default function DocumentDetail() {
                 <SigningTimeline parties={doc?.parties} />
               </div>
 
-              {doc?.fileUrl && (
+              {doc?._id && (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl
                                 border border-slate-100 dark:border-slate-800
                                 shadow-sm p-5">

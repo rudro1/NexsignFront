@@ -3603,8 +3603,14 @@ function DeclineModal({ onClose, onConfirm, loading }) {
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════════
 export default function TemplateSigner() {
-  const { token } = useParams();
+  const { slug, signCode, token } = useParams();
   const navigate  = useNavigate();
+
+  const signingRef = useMemo(() => {
+    if (slug && signCode) return { slug, signCode };
+    if (token) return { token };
+    return null;
+  }, [slug, signCode, token]);
 
   const [sessionData,  setSessionData]  = useState(null);
   const [templateData, setTemplateData] = useState(null);
@@ -3633,19 +3639,21 @@ export default function TemplateSigner() {
 
   // ── Load session ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!token) return;
+    if (!signingRef) {
+      setError('No signing link provided.');
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
 
     (async () => {
       try {
-        const data = await templateApi.getSession(token);
+        const data = await templateApi.getSession(signingRef);
         if (cancelled) return;
         setSessionData(data.session);
         setTemplateData(data.template);
-        // Initialize employee fields; date fields auto-fill to today
         setFields(initSigningFields(data.template.fields || []));
         setTotalPages(data.template.totalPages || 1);
-        // Jump to first page that has fields
         const pages = [...new Set((data.template.fields || []).map(f => f.page || 1))].sort((a, b) => a - b);
         if (pages[0]) setCurrentPage(pages[0]);
       } catch (e) {
@@ -3660,7 +3668,7 @@ export default function TemplateSigner() {
     })();
 
     return () => { cancelled = true; };
-  }, [token]);
+  }, [signingRef]);
 
   // Page title
   useEffect(() => {
@@ -3671,8 +3679,8 @@ export default function TemplateSigner() {
 
   // PDF proxy URL (backend serves boss-signed PDF to avoid CORS)
   const pdfProxyUrl = useMemo(
-    () => (token ? templateApi.getPdfProxyUrl(token) : ''),
-    [token],
+    () => (signingRef ? templateApi.getPdfProxyUrl(signingRef) : ''),
+    [signingRef],
   );
 
   // ── Field handlers ────────────────────────────────────────────────────────
@@ -3710,7 +3718,7 @@ export default function TemplateSigner() {
         fields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
       );
 
-      await templateApi.employeeSign(token, {
+      await templateApi.employeeSign(signingRef, {
         signatureDataUrl: sigField?.value || null,
         fieldValues,
         clientTime: new Date().toISOString(),
@@ -3729,13 +3737,13 @@ export default function TemplateSigner() {
     } finally {
       setSubmitting(false);
     }
-  }, [fields, token]);
+  }, [fields, signingRef]);
 
   // ── Decline ───────────────────────────────────────────────────────────────
   const handleDecline = useCallback(async (reason) => {
     setDeclining(true);
     try {
-      await templateApi.employeeDecline(token, reason);
+      await templateApi.employeeDecline(signingRef, reason);
       setShowDecline(false);
       setPhase('declined');
     } catch (e) {
@@ -3743,7 +3751,7 @@ export default function TemplateSigner() {
     } finally {
       setDeclining(false);
     }
-  }, [token]);
+  }, [signingRef]);
 
   const allFilled = useMemo(() => {
     const req = fields.filter(f => f.required !== false);
@@ -3901,7 +3909,7 @@ export default function TemplateSigner() {
       {/* PDF Viewer */}
       <main className="flex-1 min-h-0">
         <PdfRenderer
-          key={token}
+          key={slug && signCode ? `${slug}/${signCode}` : token}
           pdfUrl={pdfProxyUrl}
           fields={fields}
           currentPage={currentPage}

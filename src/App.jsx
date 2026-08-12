@@ -172,8 +172,12 @@ function AppRoutes() {
         />
 
         {/* ── Public signing ───────────────────────────────── */}
+        <Route path="/sign/:slug/:signCode"
+               element={<SignerView />} />
         <Route path="/sign/:token"
                element={<SignerView />} />
+        <Route path="/template-sign/:slug/:signCode"
+               element={<TemplateSigner />} />
         <Route path="/template-sign/:token"
                element={<TemplateSigner />} />
         <Route path="/template-campaign/boss/:token"

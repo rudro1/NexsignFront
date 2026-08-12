@@ -44,8 +44,10 @@ export const ROUTE_MAP = {
   templateDetail:   '/templates/:id',
   documentDetail:   '/documents/:id',
   audit:            '/audit/:id',
-  sign:             '/sign/:token',
-  templateSign:     '/template-sign/:token',
+  sign:             '/sign/:slug/:signCode',
+  signLegacy:       '/sign/:token',
+  templateSign:     '/template-sign/:slug/:signCode',
+  templateSignLegacy: '/template-sign/:token',
   admin:            '/admin',
 };
 

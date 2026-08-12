@@ -345,14 +345,29 @@ export const documentApi = {
     }),
 
   // Public — no auth
-  validateToken: (token, options = {}) =>
-    publicGet(`/documents/sign/validate/${token}`, options),
+  validateToken: (ref, options = {}) => {
+    if (ref && typeof ref === 'object' && ref.slug && ref.signCode) {
+      return publicGet(
+        `/documents/sign/v/${encodeURIComponent(ref.slug)}/${encodeURIComponent(ref.signCode)}`,
+        options,
+      );
+    }
+    const token = typeof ref === 'string' ? ref : ref?.token;
+    return publicGet(`/documents/sign/validate/${token}`, options);
+  },
 
   submitSignature: (data) =>
     api.post('/documents/sign/submit', data),
 
-  getPdfProxy: (token) =>
-    publicApiUrl(`/documents/sign/${token}/pdf`),
+  getPdfProxy: (ref) => {
+    if (ref && typeof ref === 'object' && ref.slug && ref.signCode) {
+      return publicApiUrl(
+        `/documents/sign/v/${encodeURIComponent(ref.slug)}/${encodeURIComponent(ref.signCode)}/pdf`,
+      );
+    }
+    const token = typeof ref === 'string' ? ref : ref?.token;
+    return publicApiUrl(`/documents/sign/${token}/pdf`);
+  },
 
   /** Authenticated owner PDF preview (bypasses Cloudinary 401) */
   getDocumentPdfUrl: (docId, signed = false) => {
@@ -428,30 +443,48 @@ export const templateApi = {
     api.get(`/templates/${id}/sessions`, { noCache: true }),
 
   /** Public signing session (template email links) */
-  getSession: async (token) => {
-    const res = await api.get(`/templates/sign/validate/${token}`, { noCache: true });
+  getSession: async (ref) => {
+    let path;
+    if (ref && typeof ref === 'object' && ref.slug && ref.signCode) {
+      path = `/templates/sign/v/${encodeURIComponent(ref.slug)}/${encodeURIComponent(ref.signCode)}`;
+    } else {
+      const token = typeof ref === 'string' ? ref : ref?.token;
+      path = `/templates/sign/validate/${token}`;
+    }
+    const res = await api.get(path, { noCache: true });
     return res.data;
   },
 
-  validateEmployeeToken: (token) =>
-    api.get(
-      `/templates/sign/validate/${token}`,
-      { noCache: true },
-    ),
+  validateEmployeeToken: (ref) => templateApi.getSession(ref),
 
-  submitEmployeeSignature: (token, data) =>
-    api.post(`/templates/sign/submit/${token}`, data),
-
-  /** Alias used by TemplateSigner */
-  employeeSign: (token, data) =>
-    api.post(`/templates/sign/submit/${token}`, data),
-
-  declineEmployee: (token, data) =>
-    api.post(`/templates/sign/decline/${token}`, data),
+  submitEmployeeSignature: (ref, data) => {
+    if (ref && typeof ref === 'object' && ref.slug && ref.signCode) {
+      return api.post(
+        `/templates/sign/v/${encodeURIComponent(ref.slug)}/${encodeURIComponent(ref.signCode)}/submit`,
+        data,
+      );
+    }
+    const token = typeof ref === 'string' ? ref : ref?.token;
+    return api.post(`/templates/sign/submit/${token}`, data);
+  },
 
   /** Alias used by TemplateSigner */
-  employeeDecline: (token, reason) =>
-    api.post(`/templates/sign/decline/${token}`, {
+  employeeSign: (ref, data) => templateApi.submitEmployeeSignature(ref, data),
+
+  declineEmployee: (ref, data) => {
+    if (ref && typeof ref === 'object' && ref.slug && ref.signCode) {
+      return api.post(
+        `/templates/sign/v/${encodeURIComponent(ref.slug)}/${encodeURIComponent(ref.signCode)}/decline`,
+        data,
+      );
+    }
+    const token = typeof ref === 'string' ? ref : ref?.token;
+    return api.post(`/templates/sign/decline/${token}`, data);
+  },
+
+  /** Alias used by TemplateSigner */
+  employeeDecline: (ref, reason) =>
+    templateApi.declineEmployee(ref, {
       reason: typeof reason === 'string' ? reason : reason?.reason || '',
     }),
 
@@ -512,8 +545,15 @@ export const templateApi = {
     return { data: await res.blob(), status: res.status };
   },
 
-  getPdfProxyUrl: (token) =>
-    publicApiUrl(`/templates/sign/${token}/pdf`),
+  getPdfProxyUrl: (ref) => {
+    if (ref && typeof ref === 'object' && ref.slug && ref.signCode) {
+      return publicApiUrl(
+        `/templates/sign/v/${encodeURIComponent(ref.slug)}/${encodeURIComponent(ref.signCode)}/pdf`,
+      );
+    }
+    const token = typeof ref === 'string' ? ref : ref?.token;
+    return publicApiUrl(`/templates/sign/${token}/pdf`);
+  },
 
   /** Preview employee signing email HTML */
   previewEmployeeEmail: (data, templateId = null) =>
