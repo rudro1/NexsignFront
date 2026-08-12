@@ -1496,6 +1496,11 @@ function BossSignModal({ template, onClose, onSigned }) {
           data.message || 'Signed! First approver has been emailed.',
           { duration: 6000 },
         );
+      } else if (data.emailsQueued) {
+        toast.success(
+          data.message || `Signed! Sending links to ${total} employees…`,
+          { duration: 6000 },
+        );
       } else if (failed > 0) {
         toast.warning(
           `Signed, but ${failed} of ${total} employee emails failed. Check your inbox and resend from Template Detail.`,

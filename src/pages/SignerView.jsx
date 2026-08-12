@@ -363,13 +363,23 @@ const FIELD_META = {
   number:    { icon: Hash,        label: 'Number',        color: '#6366f1', border: 'border-indigo-400', bg: 'bg-indigo-50/90'  },
 };
 
+function fieldInputStyle(field) {
+  return {
+    fontFamily: field.fontFamily || 'inherit',
+    fontSize:   `${Math.max(8, (field.fontSize || 12) * 0.75)}px`,
+    fontWeight: field.fontWeight === 'bold' ? 700 : 400,
+    color:      field.color || '#334155',
+  };
+}
+
 function InlineInput({ field, onChange, type = 'text' }) {
   return (
     <input type={type}
       value={field.value || ''}
       placeholder={field.placeholder || (type === 'number' ? '0' : 'Type here...')}
       className="absolute inset-0 w-full h-full bg-white/95 px-2
-                 text-xs border-none outline-none z-10 text-slate-700"
+                 text-xs border-none outline-none z-10"
+      style={fieldInputStyle(field)}
       onClick={e => e.stopPropagation()}
       onChange={e => onChange(field.id, e.target.value)}
     />
@@ -383,6 +393,49 @@ const FieldOverlay = React.memo(function FieldOverlay({
   const Icon = meta.icon;
   const filled = !!field.value;
   const pxW  = canvasW ? (field.width / 100) * canvasW : 100;
+
+  // Text/number/date: keep inputs editable (never switch to read-only after 1 char)
+  if (isMine && (field.type === 'text' || field.type === 'number')) {
+    return (
+      <div
+        className={cn(
+          'absolute rounded-lg transition-all duration-150 overflow-hidden select-none border-2',
+          filled ? 'border-emerald-400/70 bg-white' : 'border-dashed', meta.border, meta.bg,
+          'hover:brightness-95 hover:shadow-md',
+        )}
+        style={{
+          left: `${field.x ?? 0}%`, top: `${field.y ?? 0}%`,
+          width: `${field.width ?? 20}%`, height: `${field.height ?? 6}%`,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <InlineInput field={field} onChange={onChange} type={field.type === 'number' ? 'number' : 'text'} />
+      </div>
+    );
+  }
+
+  if (isMine && field.type === 'date') {
+    return (
+      <div
+        className={cn(
+          'absolute rounded-lg overflow-hidden border-2',
+          filled ? 'border-emerald-400/70 bg-white' : 'border-dashed border-emerald-400 bg-emerald-50/90',
+        )}
+        style={{
+          left: `${field.x ?? 0}%`, top: `${field.y ?? 0}%`,
+          width: `${field.width ?? 20}%`, height: `${field.height ?? 6}%`,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <input type="date"
+          value={field.value || ''}
+          className="absolute inset-0 w-full h-full bg-white/95 px-1 text-xs border-none outline-none z-10"
+          style={fieldInputStyle(field)}
+          onChange={e => onChange(field.id, e.target.value)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -413,8 +466,11 @@ const FieldOverlay = React.memo(function FieldOverlay({
         ) : field.type === 'checkbox' ? (
           <CheckSquare className="w-5 h-5 text-amber-500" />
         ) : (
-          <span className="px-1.5 truncate w-full text-center font-medium text-slate-700"
-            style={{ fontSize: Math.min(pxW * 0.1, 13) }}>
+          <span className="px-1.5 w-full text-center font-medium text-slate-700 break-words leading-tight"
+            style={{
+              ...fieldInputStyle(field),
+              fontSize: Math.min(pxW * 0.1, field.fontSize || 13),
+            }}>
             {field.value}
           </span>
         )
@@ -431,15 +487,6 @@ const FieldOverlay = React.memo(function FieldOverlay({
                 </span>
               )}
             </div>
-          )}
-          {isMine && field.type === 'text'   && <InlineInput field={field} onChange={onChange} type="text"   />}
-          {isMine && field.type === 'number' && <InlineInput field={field} onChange={onChange} type="number" />}
-          {isMine && field.type === 'date' && (
-            <input type="date" defaultValue={field.value || ''}
-              className="absolute inset-0 w-full h-full bg-white/95 px-1
-                         text-xs border-none outline-none z-10 text-slate-700"
-              onClick={e => e.stopPropagation()}
-              onChange={e => onChange(field.id, e.target.value)} />
           )}
           {isMine && field.type === 'checkbox' && (
             <input type="checkbox"

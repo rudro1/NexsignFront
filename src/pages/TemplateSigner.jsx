@@ -2918,6 +2918,8 @@ const FieldOverlay = React.memo(function FieldOverlay({
           style={{
             fontFamily: field.fontFamily || 'inherit',
             fontSize:   `${Math.max(9, (field.fontSize || 12) * 0.7)}px`,
+            fontWeight: field.fontWeight === 'bold' ? 700 : 400,
+            color:      field.color || '#334155',
           }}
           onChange={e => onTextChange(field.id, e.target.value)}
           onClick={e => e.stopPropagation()}

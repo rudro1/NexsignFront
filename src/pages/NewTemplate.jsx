@@ -938,7 +938,7 @@ const payload = {
                     ))}
                   </div>
 
-                  {selectedField.type === 'text' && (
+                  {(selectedField.type === 'text' || selectedField.type === 'number') && (
                     <div className="space-y-2.5">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-slate-400 font-medium">Font Family</Label>
@@ -967,6 +967,28 @@ const payload = {
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-400 font-medium">Font Weight</Label>
+                        <Select value={selectedField.fontWeight || 'normal'}
+                          onValueChange={v => updateFieldTypography('fontWeight', v)}>
+                          <SelectTrigger className="h-9 rounded-xl text-sm border-slate-200 dark:border-slate-700">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="bold">Bold</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-400 font-medium">Text Color</Label>
+                        <input
+                          type="color"
+                          value={selectedField.color || '#000000'}
+                          onChange={e => updateFieldTypography('color', e.target.value)}
+                          className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
+                        />
                       </div>
                     </div>
                   )}
