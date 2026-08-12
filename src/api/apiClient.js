@@ -448,12 +448,35 @@ export const templateApi = {
   resendSignedCopy: (templateId, sessionId) =>
     api.post(`/templates/${templateId}/sessions/${sessionId}/resend-signed`),
 
-  getSessionSignedPdfUrl: (templateId, sessionId) =>
-    `${BASE}/templates/${templateId}/sessions/${sessionId}/pdf`,
-
   fetchSessionSignedPdfBlob: async (templateId, sessionId) => {
     const token = localStorage.getItem('token');
     const url = `${BASE}/templates/${templateId}/sessions/${sessionId}/pdf`;
+    const res = await fetch(url, {
+      credentials: 'omit',
+      headers: {
+        Accept: 'application/pdf',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      let message = `PDF load failed (${res.status})`;
+      try {
+        const err = await res.json();
+        message = err.message || message;
+      } catch {
+        try { message = (await res.text()) || message; } catch { /* ignore */ }
+      }
+      throw { message, status: res.status };
+    }
+
+    return { data: await res.blob(), status: res.status };
+  },
+
+  /** Owner preview of boss-signed template PDF (before/without employee fills) */
+  fetchTemplatePdfBlob: async (templateId) => {
+    const token = localStorage.getItem('token');
+    const url = `${BASE}/templates/${templateId}/pdf`;
     const res = await fetch(url, {
       credentials: 'omit',
       headers: {

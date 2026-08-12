@@ -1026,7 +1026,7 @@ import { templateApi } from '@/api/apiClient';
 import SignaturePad from '@/components/signing/SignaturePad';
 import EmailPreviewModal from '@/components/email/EmailPreviewModal';
 import ReuseTemplateModal from '@/components/templates/ReuseTemplateModal';
-import BossExtraFields from '@/components/signing/BossExtraFields';
+import SignedPdfPreviewModal from '@/components/signing/SignedPdfPreviewModal';
 import {
   initSigningFields,
   toFieldValues,
@@ -1225,7 +1225,7 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
   );
 }
 
-function SessionRow({ session, template, onResend, onPreview }) {
+function SessionRow({ session, template, onResend, onPreview, onViewSignedPdf }) {
   const [resending, setResending] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [resendingCopy, setResendingCopy] = useState(false);
@@ -1248,6 +1248,10 @@ function SessionRow({ session, template, onResend, onPreview }) {
   }, [templateId, session._id]);
 
   const handleViewSigned = async () => {
+    if (onViewSignedPdf) {
+      onViewSignedPdf(session);
+      return;
+    }
     try {
       const blob = await loadSignedPdf();
       const url  = URL.createObjectURL(blob);
@@ -1412,20 +1416,6 @@ function SessionRow({ session, template, onResend, onPreview }) {
                 : <Mail className="w-3.5 h-3.5" />}
             </button>
           </>
-        )}
-
-        {session.signedFileUrl && !isSigned && (
-          <a
-            href={session.signedFileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 rounded-lg text-slate-400
-                       hover:text-emerald-500 hover:bg-emerald-50
-                       dark:hover:bg-emerald-900/20 transition-colors"
-            title="Download signed PDF"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </a>
         )}
 
         {canResend && (
@@ -1686,6 +1676,9 @@ export default function TemplateDetail() {
   const [campaigns,        setCampaigns]        = useState([]);
   const [auditLogs,        setAuditLogs]        = useState([]);
   const [auditLoading,     setAuditLoading]     = useState(false);
+  const [pdfPreview,       setPdfPreview]       = useState(null);
+
+  const prevSignedRef = useRef(0);
 
   // ✅ BUG 2 FIX: Track if boss sign modal was already shown
   // to prevent re-opening after navigation back.
@@ -1732,6 +1725,34 @@ export default function TemplateDetail() {
     if (activeTab === 'audit') loadAudit();
   }, [activeTab, loadAudit]);
 
+  const openSignedSessionPreview = useCallback((session) => {
+    if (!id || !session?._id) return;
+    const safeName = `${(template?.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_')}_${session.recipientName || 'signed'}.pdf`;
+    setPdfPreview({
+      title:    `${session.recipientName} — Signed PDF`,
+      subtitle: `${session.recipientEmail} · Includes signatures, filled fields & audit certificate`,
+      downloadName: safeName,
+      loadBlob: async () => {
+        const { data } = await templateApi.fetchSessionSignedPdfBlob(id, session._id);
+        return data;
+      },
+    });
+  }, [id, template?.title]);
+
+  const openMasterTemplatePreview = useCallback(() => {
+    if (!id) return;
+    const safeName = `${(template?.title || 'template').replace(/[^a-zA-Z0-9._-]/g, '_')}_authoriser-signed.pdf`;
+    setPdfPreview({
+      title:    template?.title || 'Template PDF',
+      subtitle: 'Authoriser-signed base document (employee fields shown as placeholders)',
+      downloadName: safeName,
+      loadBlob: async () => {
+        const { data } = await templateApi.fetchTemplatePdfBlob(id);
+        return data;
+      },
+    });
+  }, [id, template?.title]);
+
   const stats = useMemo(() => {
     if (sessionStats) return sessionStats;
     const signed   = sessions.filter(s => s.status === 'signed').length;
@@ -1741,6 +1762,15 @@ export default function TemplateDetail() {
     const pending  = total - signed - declined;
     return { total, signed, declined, viewed, pending };
   }, [sessions, sessionStats]);
+
+  // Refresh audit trail when new signatures arrive (from polling)
+  useEffect(() => {
+    const signed = stats.signed || 0;
+    if (signed > prevSignedRef.current) {
+      loadAudit();
+    }
+    prevSignedRef.current = signed;
+  }, [stats.signed, loadAudit]);
 
   const filtered = useMemo(() => {
     let list = sessions;
@@ -2045,16 +2075,12 @@ export default function TemplateDetail() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 {template.fileUrl && (
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={template.bossSignedFileUrl || template.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="gap-2 cursor-pointer"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      View PDF
-                    </a>
+                  <DropdownMenuItem
+                    onClick={openMasterTemplatePreview}
+                    className="gap-2 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    View PDF
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
@@ -2250,6 +2276,38 @@ export default function TemplateDetail() {
 
         {activeTab === 'sessions' && (
           <>
+        {/* MASTER PDF PREVIEW (authoriser-signed base) */}
+        {(template.bossSignedFileUrl || template.fileUrl) && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#28ABDF]" />
+                  Document Preview
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {template.bossSignedFileUrl
+                    ? 'Authoriser-signed PDF — employees fill their fields on top of this'
+                    : 'Original uploaded PDF — sign as authoriser to distribute'}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openMasterTemplatePreview}
+                className="h-9 rounded-xl gap-1.5 text-xs shrink-0"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Open Preview
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              After an employee signs, use the <strong className="text-slate-500">view icon</strong> on their row to see the fully completed PDF with all fields and the audit certificate.
+            </p>
+          </div>
+        )}
+
         {/* PROGRESS */}
         {(isActive || isCompleted) && stats.total > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border
@@ -2401,6 +2459,7 @@ export default function TemplateDetail() {
                   template={template}
                   onResend={handleResend}
                   onPreview={openSessionPreview}
+                  onViewSignedPdf={openSignedSessionPreview}
                 />
               ))
             )}
@@ -2434,6 +2493,15 @@ export default function TemplateDetail() {
           refetch();
           templateApi.listCampaigns(id).then(res => setCampaigns(res.data?.campaigns || []));
         }}
+      />
+
+      <SignedPdfPreviewModal
+        open={!!pdfPreview}
+        onClose={() => setPdfPreview(null)}
+        title={pdfPreview?.title}
+        subtitle={pdfPreview?.subtitle}
+        downloadName={pdfPreview?.downloadName}
+        loadBlob={pdfPreview?.loadBlob}
       />
     </div>
   );

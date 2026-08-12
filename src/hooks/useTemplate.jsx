@@ -189,16 +189,19 @@ export function useTemplate(id, { enabled = true } = {}) {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  // Poll sessions — 30s (active templates only)
+  const pendingCount = sessionStats?.pending ?? 0;
+  const shouldPoll = enabled && !!id && (
+    !template ||
+    ['active', 'boss_pending', 'approver_pending'].includes(template?.status) ||
+    pendingCount > 0
+  );
+
+  // Poll while employees are still signing (8s when pending, 15s otherwise)
   usePolling(
-    () => {
-      if (!template) return;
-      if (!['active', 'boss_pending'].includes(template.status)) return;
-      fetch(true);
-    },
+    () => fetch(true),
     {
-      interval:  30_000,
-      enabled:   enabled && !!id,
+      interval:  pendingCount > 0 ? 8_000 : 15_000,
+      enabled:   shouldPoll,
       immediate: false,
     },
   );
