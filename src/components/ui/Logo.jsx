@@ -4,13 +4,13 @@ import { Link } from 'react-router-dom';
 const cn = (...c) => c.filter(Boolean).join(' ');
 
 const SIZES = {
-  sm: { box: 'w-7 h-7', letter: 'text-[11px]', word: 'text-base', radius: 'rounded-[6px]' },
-  md: { box: 'w-9 h-9', letter: 'text-[13px]', word: 'text-xl',   radius: 'rounded-[7px]' },
-  lg: { box: 'w-10 h-10', letter: 'text-[15px]', word: 'text-2xl', radius: 'rounded-lg' },
+  sm: { img: 'w-7 h-7',   word: 'text-base' },
+  md: { img: 'w-9 h-9',   word: 'text-xl'   },
+  lg: { img: 'w-11 h-11', word: 'text-2xl'  },
 };
 
 /**
- * NexSign brand mark — blue gradient box with white "N" (matches email footer).
+ * NexSign brand mark — official new NS pen logo mark with transparent background.
  */
 export function NexSignLogo({
   size = 'md',
@@ -22,22 +22,20 @@ export function NexSignLogo({
 }) {
   const s = SIZES[size] || SIZES.md;
   const wordClass = tone === 'light'
-    ? 'font-bold text-white tracking-tight leading-none'
-    : 'font-bold text-slate-900 dark:text-white tracking-tight leading-none';
+    ? 'font-extrabold text-white tracking-tight leading-none'
+    : 'font-extrabold text-slate-900 dark:text-white tracking-tight leading-none';
 
   const content = (
     <div className={cn('flex items-center gap-2.5 shrink-0 group', className)}>
-      <div
-        className={cn(
-          s.box,
-          s.radius,
-          'bg-gradient-to-br from-[#28ABDF] to-[#1d6fa8]',
-          'flex items-center justify-center',
-          'shadow-md shadow-sky-500/30',
-          'group-hover:shadow-sky-500/45 transition-shadow',
-        )}
-      >
-        <span className={cn('font-black text-white leading-none select-none', s.letter)}>N</span>
+      <div className="relative shrink-0 flex items-center justify-center">
+        <img
+          src="/nexsign-logo.png"
+          alt="NexSign"
+          className={cn(
+            s.img,
+            'object-contain drop-shadow-sm transition-transform duration-200 group-hover:scale-105 select-none',
+          )}
+        />
       </div>
       {showWordmark && (
         <div className="flex flex-col min-w-0">
@@ -45,7 +43,7 @@ export function NexSignLogo({
             NexSign
           </span>
           {showTagline && (
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium leading-tight mt-0.5">
               Trusted eSigning
             </span>
           )}
@@ -66,3 +64,4 @@ export function NexSignLogo({
 }
 
 export default NexSignLogo;
+
