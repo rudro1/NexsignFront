@@ -17,6 +17,10 @@ const NO_NAVBAR_PATTERNS = [
 
 // Full-width (no max-w, no padding) routes
 const FULL_WIDTH_PATTERNS = [
+  /^\/$/,
+  /^\/pricing$/,
+  /^\/login$/,
+  /^\/register$/,
   /^\/sign\//,
   /^\/template-sign\//,
   /^\/document-editor/,
@@ -27,6 +31,10 @@ const FULL_WIDTH_PATTERNS = [
 
 // No vertical padding routes
 const NO_PADDING_PATTERNS = [
+  /^\/$/,
+  /^\/pricing$/,
+  /^\/login$/,
+  /^\/register$/,
   /^\/document-editor/,
   /^\/editor\//,
   /^\/documents\//,
@@ -54,7 +62,7 @@ export default function Layout({ children }) {
   }, [theme]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-slate-950 transition-colors duration-300 flex flex-col w-full overflow-x-hidden">
 
       {/* Navbar — already includes h-16 spacer internally */}
       {showNavbar && <Navbar />}
