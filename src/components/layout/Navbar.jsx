@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import NexSignLogo from '@/components/ui/Logo';
+import ProfileSettingsModal from '@/components/profile/ProfileSettingsModal';
 
 // ─── cn helper ────────────────────────────────────────────────────
 const cn = (...c) => c.filter(Boolean).join(' ');
@@ -84,6 +85,7 @@ function ThemeToggle() {
 // ════════════════════════════════════════════════════════════════
 function UserMenu({ user, onLogout, isAdmin }) {
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const ref  = useRef(null);
 
   // Outside click
@@ -103,126 +105,172 @@ function UserMenu({ user, onLogout, isAdmin }) {
   }, []);
 
   const initials = getInitials(user?.full_name || user?.name);
+  const avatarUrl = user?.avatar || user?.photoURL;
 
   const MENU_ITEMS = [
-    { icon: LayoutDashboard, label: 'Dashboard',   to: isAdmin ? '/admin'     : '/dashboard' },
+    { icon: LayoutDashboard, label: 'Dashboard',   to: isAdmin ? '/admin' : '/dashboard' },
     { icon: FileText,        label: 'Documents',   to: '/dashboard',  hide: isAdmin },
     { icon: LayoutTemplate,  label: 'Templates',   to: '/templates' },
-    { icon: Settings,        label: 'Settings',    to: '/settings'   },
   ].filter(i => !i.hide);
 
   return (
-    <div ref={ref} className="relative">
-      {/* Trigger */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={cn(
-          'flex items-center gap-2 px-2 py-1.5 rounded-xl',
-          'hover:bg-slate-100 dark:hover:bg-slate-800',
-          'transition-colors duration-150',
-          open && 'bg-slate-100 dark:bg-slate-800',
-        )}
-      >
-        {/* Avatar */}
-        <div className="relative">
-          <div className={cn(
-            'w-8 h-8 rounded-full flex items-center justify-center',
-            'bg-gradient-to-br from-sky-400 to-sky-600',
-            'text-white text-xs font-black shrink-0 shadow-sm',
-          )}>
-            {initials}
-          </div>
-          {/* Online dot */}
-          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white dark:border-slate-900" />
-        </div>
-
-        <span className="hidden sm:block text-sm font-semibold text-slate-700 dark:text-slate-300 max-w-[90px] truncate">
-          {(user?.full_name || user?.name)?.split(' ')[0]}
-        </span>
-
-        <ChevronDown
-          size={14}
+    <>
+      <div ref={ref} className="relative">
+        {/* Trigger */}
+        <button
+          onClick={() => setOpen(o => !o)}
           className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
+            'flex items-center gap-2 px-2 py-1.5 rounded-xl',
+            'hover:bg-slate-100 dark:hover:bg-slate-800',
+            'transition-colors duration-150',
+            open && 'bg-slate-100 dark:bg-slate-800',
           )}
-        />
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div className={cn(
-          'absolute right-0 top-full mt-2 w-56 z-50',
-          'bg-white dark:bg-slate-900',
-          'border border-slate-200 dark:border-slate-700',
-          'rounded-2xl shadow-2xl shadow-slate-200/60 dark:shadow-slate-900/60',
-          'overflow-hidden',
-          'animate-in fade-in zoom-in-95 duration-150',
-        )}>
-
-          {/* User info header */}
-          <div className="px-4 py-3.5 bg-gradient-to-r from-sky-50 to-violet-50/50 dark:from-sky-900/20 dark:to-violet-900/10 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center text-white text-sm font-black shrink-0">
+        >
+          {/* Avatar */}
+          <div className="relative">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={user?.full_name || 'User'}
+                className="w-8 h-8 rounded-full object-cover shrink-0 shadow-sm border border-slate-200 dark:border-slate-700"
+              />
+            ) : (
+              <div className={cn(
+                'w-8 h-8 rounded-full flex items-center justify-center',
+                'bg-gradient-to-br from-sky-400 to-sky-600',
+                'text-white text-xs font-black shrink-0 shadow-sm',
+              )}>
                 {initials}
               </div>
-              <div className="min-w-0">
-                <p className="font-bold text-sm text-slate-900 dark:text-white truncate leading-tight">
-                  {user?.full_name || user?.name}
-                </p>
-                <p className="text-[11px] text-slate-400 truncate leading-tight">
-                  {user?.email}
-                </p>
-              </div>
-            </div>
-            {/* Role badge */}
-            {isAdmin && (
-              <div className="mt-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-black rounded-full uppercase tracking-wider">
-                  <ShieldCheck size={9} /> Admin
-                </span>
-              </div>
             )}
+            {/* Online dot */}
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white dark:border-slate-900" />
           </div>
 
-          {/* Nav links */}
-          <div className="py-1.5">
-            {MENU_ITEMS.map(({ icon: Icon, label, to }) => (
-              <Link
-                key={to + label}
-                to={to}
-                onClick={() => setOpen(false)}
+          <span className="hidden sm:block text-sm font-semibold text-slate-700 dark:text-slate-300 max-w-[100px] truncate">
+            {(user?.full_name || user?.name)?.split(' ')[0]}
+          </span>
+
+          <ChevronDown
+            size={14}
+            className={cn(
+              'text-slate-400 transition-transform duration-200',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+
+        {/* Dropdown */}
+        {open && (
+          <div className={cn(
+            'absolute right-0 top-full mt-2 w-60 z-50',
+            'bg-white dark:bg-slate-900',
+            'border border-slate-200 dark:border-slate-700',
+            'rounded-2xl shadow-2xl shadow-slate-200/60 dark:shadow-slate-900/60',
+            'overflow-hidden',
+            'animate-in fade-in zoom-in-95 duration-150',
+          )}>
+
+            {/* User info header - Clickable to open Profile */}
+            <div
+              onClick={() => { setOpen(false); setProfileOpen(true); }}
+              className="px-4 py-3.5 bg-gradient-to-r from-sky-50 to-violet-50/50 dark:from-sky-900/20 dark:to-violet-900/10 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-sky-100/50 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={user?.full_name || 'User'}
+                    className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm border border-slate-200 dark:border-slate-700"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center text-white text-sm font-black shrink-0">
+                    {initials}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-slate-900 dark:text-white truncate leading-tight">
+                    {user?.full_name || user?.name}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate leading-tight">
+                    {user?.email}
+                  </p>
+                  {user?.designation && (
+                    <p className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold truncate leading-tight mt-0.5">
+                      {user.designation}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {/* Role badge */}
+              {isAdmin && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-black rounded-full uppercase tracking-wider">
+                    <ShieldCheck size={9} /> Admin
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Nav links */}
+            <div className="py-1.5">
+              {MENU_ITEMS.map(({ icon: Icon, label, to }) => (
+                <Link
+                  key={to + label}
+                  to={to}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2.5',
+                    'text-sm font-medium text-slate-700 dark:text-slate-300',
+                    'hover:bg-slate-50 dark:hover:bg-slate-800',
+                    'transition-colors',
+                  )}
+                >
+                  <Icon size={15} className="text-slate-400" />
+                  {label}
+                </Link>
+              ))}
+
+              {/* Profile & Settings Trigger */}
+              <button
+                onClick={() => { setOpen(false); setProfileOpen(true); }}
                 className={cn(
-                  'flex items-center gap-3 px-4 py-2.5',
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-left',
                   'text-sm font-medium text-slate-700 dark:text-slate-300',
                   'hover:bg-slate-50 dark:hover:bg-slate-800',
                   'transition-colors',
                 )}
               >
-                <Icon size={15} className="text-slate-400" />
-                {label}
-              </Link>
-            ))}
-          </div>
+                <Settings size={15} className="text-slate-400" />
+                Profile Settings
+              </button>
+            </div>
 
-          {/* Logout */}
-          <div className="border-t border-slate-100 dark:border-slate-800 py-1.5">
-            <button
-              onClick={() => { setOpen(false); onLogout(); }}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-2.5',
-                'text-sm font-medium text-red-500',
-                'hover:bg-red-50 dark:hover:bg-red-900/20',
-                'transition-colors',
-              )}
-            >
-              <LogOut size={15} />
-              Sign Out
-            </button>
+            {/* Logout */}
+            <div className="border-t border-slate-100 dark:border-slate-800 py-1.5">
+              <button
+                onClick={() => { setOpen(false); onLogout(); }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5',
+                  'text-sm font-medium text-red-500',
+                  'hover:bg-red-50 dark:hover:bg-red-900/20',
+                  'transition-colors',
+                )}
+              >
+                <LogOut size={15} />
+                Sign Out
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      {/* Profile Settings Modal */}
+      <ProfileSettingsModal
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+      />
+    </>
   );
 }
 
@@ -313,8 +361,9 @@ export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [scrolled,   setScrolled]   = useState(false);
+  const [mobileOpen,        setMobileOpen]        = useState(false);
+  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
+  const [scrolled,          setScrolled]          = useState(false);
 
   // ── Active path check ──────────────────────────────────────
   const isActive = useCallback((path) => location.pathname === path, [location.pathname]);
@@ -578,29 +627,58 @@ export default function Navbar() {
             ) : (
               <div className="pb-2 space-y-1">
                 {/* Profile card */}
-                <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center text-white text-sm font-black shrink-0">
-                    {getInitials(user?.full_name || user?.name)}
-                  </div>
+                <div
+                  onClick={() => { setMobileOpen(false); setMobileProfileOpen(true); }}
+                  className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {user?.avatar || user?.photoURL ? (
+                    <img
+                      src={user.avatar || user.photoURL}
+                      alt={user?.full_name || 'User'}
+                      className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm border border-slate-200 dark:border-slate-700"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center text-white text-sm font-black shrink-0">
+                      {getInitials(user?.full_name || user?.name)}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-sm text-slate-900 dark:text-white truncate">
                       {user?.full_name || user?.name}
                     </p>
                     <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                    {user?.designation && (
+                      <p className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold truncate mt-0.5">
+                        {user.designation}
+                      </p>
+                    )}
                   </div>
-                  {isAdmin && (
+                  {isAdmin ? (
                     <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-black rounded-full uppercase">
                       Admin
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                      Edit
                     </span>
                   )}
                 </div>
 
+                {/* Profile Settings Button */}
+                <button
+                  onClick={() => { setMobileOpen(false); setMobileProfileOpen(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-xl transition-colors"
+                >
+                  <Settings size={16} className="text-slate-400" />
+                  Profile Settings
+                </button>
+
                 {/* Logout */}
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
                 >
-                  <LogOut size={15} />
+                  <LogOut size={16} />
                   Sign Out
                 </button>
               </div>
@@ -608,6 +686,12 @@ export default function Navbar() {
           </div>
         </div>
       </nav>
+
+      {/* Mobile Profile Modal */}
+      <ProfileSettingsModal
+        isOpen={mobileProfileOpen}
+        onClose={() => setMobileProfileOpen(false)}
+      />
 
       {/* Mobile backdrop */}
       {mobileOpen && (
