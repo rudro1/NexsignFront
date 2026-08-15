@@ -40,13 +40,11 @@ const getFirebaseError = (code) => {
     'auth/popup-closed-by-user':    null,
     'auth/popup-blocked':           'Popup was blocked by your browser.',
     'auth/network-request-failed':  'Network error. Check your connection.',
-    'auth/invalid-credential':      'Invalid email or password.',
-    'auth/operation-not-allowed':   'This sign-in method is not enabled.',
+    'auth/operation-not-allowed':   'Google sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method.',
     'auth/cancelled-popup-request': null,
     'auth/internal-error':          'An internal error occurred. Try again.',
     'auth/invalid-action':          'Google sign-in failed. Enable Google in Firebase Console and add this site to Authorized Domains.',
     'auth/unauthorized-domain':     'This domain is not authorized. Add it in Firebase → Authentication → Settings → Authorized domains.',
-    'auth/operation-not-allowed':   'Google sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method.',
   };
   return map.hasOwnProperty(code)
     ? map[code]
