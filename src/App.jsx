@@ -89,7 +89,7 @@ function AppLoader() {
         <img
           src="/nexsign-logo.png"
           alt="NexSign"
-          className="w-12 h-12 rounded-2xl object-cover shadow-lg border border-slate-200/80 dark:border-slate-800"
+          className="w-14 h-14 object-contain animate-pulse"
         />
         <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
           NexSign
@@ -112,7 +112,7 @@ export function PageLoader() {
       <img
         src="/nexsign-logo.png"
         alt="NexSign"
-        className="w-10 h-10 rounded-xl object-cover shadow-md border border-slate-200/80 dark:border-slate-800 animate-pulse"
+        className="w-12 h-12 object-contain animate-pulse"
       />
       <div className="relative w-6 h-6">
         <div className="absolute inset-0 rounded-full border-2 border-slate-200 dark:border-slate-800" />

@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 const cn = (...c) => c.filter(Boolean).join(' ');
 
 const SIZES = {
-  sm: { img: 'w-10 h-10 rounded-xl',                    word: 'text-base sm:text-lg font-bold' },
-  md: { img: 'w-12 h-12 sm:w-13 sm:h-13 rounded-2xl',   word: 'text-xl sm:text-2xl font-black' },
-  lg: { img: 'w-16 h-16 sm:w-18 sm:h-18 rounded-3xl',   word: 'text-2xl sm:text-3xl font-black' },
+  sm: { img: 'w-10 h-10',                               word: 'text-base sm:text-lg font-bold' },
+  md: { img: 'w-12 h-12 sm:w-14 sm:h-14 lg:w-15 lg:h-15', word: 'text-xl sm:text-2xl lg:text-[26px] font-black' },
+  lg: { img: 'w-16 h-16 sm:w-20 sm:h-20',              word: 'text-2xl sm:text-3xl lg:text-4xl font-black' },
 };
 
 /**
@@ -28,14 +28,14 @@ export function NexSignLogo({
   const isDarkTone = tone === 'light'; // tone='light' is used on dark backgrounds
 
   const content = (
-    <div className={cn('flex items-center gap-3 shrink-0 group', className)}>
+    <div className={cn('flex items-center gap-2.5 sm:gap-3 shrink-0 group', className)}>
       <div className="relative shrink-0 flex items-center justify-center">
         <img
           src="/nexsign-logo.png"
           alt="NexSign"
           className={cn(
             s.img,
-            'object-contain select-none transition-transform duration-200 group-hover:scale-105 shadow-sm border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5',
+            'object-contain select-none transition-transform duration-200 group-hover:scale-105',
           )}
         />
       </div>
