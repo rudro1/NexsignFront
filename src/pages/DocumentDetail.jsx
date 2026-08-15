@@ -339,16 +339,21 @@ function AuditEntry({ entry }) {
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
-          {entry.actorName || entry.signerName || 'System'}
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center flex-wrap gap-1">
+          <span>{entry.actorName || entry.signerName || 'System'}</span>
+          {(entry.designation || entry.actorDesignation) && (
+            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-sky-50 dark:bg-sky-900/30 text-[#28ABDF] border border-sky-200/60 dark:border-sky-800/60">
+              {entry.designation || entry.actorDesignation}
+            </span>
+          )}
           {entry.actorEmail && (
-            <span className="text-slate-400 font-normal ml-1">· {entry.actorEmail}</span>
+            <span className="text-slate-400 font-normal">· {entry.actorEmail}</span>
           )}
         </p>
         <p className="text-[11px] text-slate-400 mt-0.5">
           {fmtDateTime(entry.timestamp || entry.createdAt)}
         </p>
-        {(entry.device || entry.browser || entry.os || entry.ip || entry.city || entry.postalCode) && (
+        {(entry.device || entry.browser || entry.os || entry.ip || entry.city || entry.postalCode || entry.latitude || entry.coordinates) && (
           <button
             onClick={() => setExpanded(e => !e)}
             className="text-[11px] text-[#28ABDF] hover:underline mt-1 font-medium"
@@ -357,16 +362,16 @@ function AuditEntry({ entry }) {
           </button>
         )}
         {expanded && (
-          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
             {[
-              { icon: Ic.Monitor, label: 'Device',  val: entry.device },
-              { icon: Ic.Globe,   label: 'Browser', val: entry.browser },
-              { icon: Ic.Globe,   label: 'OS',      val: entry.os },
-              { icon: Ic.Globe,   label: 'IP',      val: entry.ip || entry.ipAddress },
-              { icon: Ic.MapPin,  label: 'City',    val: entry.city },
-              { icon: Ic.MapPin,  label: 'Region',  val: entry.region },
-              { icon: Ic.MapPin,  label: 'Country', val: entry.country },
-              { icon: Ic.MapPin,  label: 'Postal',  val: entry.postalCode },
+              { icon: Ic.User,    label: 'Designation', val: entry.designation || entry.actorDesignation },
+              { icon: Ic.Monitor, label: 'Device',      val: entry.device },
+              { icon: Ic.Globe,   label: 'Browser',     val: entry.browser },
+              { icon: Ic.Globe,   label: 'OS',          val: entry.os },
+              { icon: Ic.Globe,   label: 'IP',          val: entry.ip || entry.ipAddress },
+              { icon: Ic.MapPin,  label: 'Location',    val: [entry.city, entry.region, entry.country].filter(Boolean).join(', ') },
+              { icon: Ic.MapPin,  label: 'GPS Coords',  val: (entry.latitude && entry.longitude) ? `${entry.latitude}, ${entry.longitude}` : entry.coordinates },
+              { icon: Ic.Clock,   label: 'Local Time',  val: entry.localTime },
             ].filter(r => r.val).map(({ icon: Icon, label, val }) => (
               <div key={label} className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                 <Icon />
@@ -480,22 +485,26 @@ export default function DocumentDetail() {
       if (mountedRef.current) {
         const events = res.data?.audit?.events ?? res.data?.logs ?? res.data?.auditLogs ?? [];
         setAuditLogs(events.map(e => ({
-          _id:        e._id,
-          action:     e.action === 'email_sent' ? 'sent'
+          _id:              e._id,
+          action:           e.action === 'email_sent' ? 'sent'
             : e.action === 'link_clicked' ? 'viewed' : e.action,
-          actorName:  e.actor?.name || e.actorName || e.signerName,
-          actorEmail: e.actor?.email || e.actorEmail,
-          timestamp:  e.timestamp || e.createdAt,
-          device:     e.device,
-          browser:    e.browser,
-          os:         e.os,
-          ip:         e.ipAddress || e.ip,
-          ipAddress:  e.ipAddress || e.ip,
-          city:       e.location?.city || e.city,
-          region:     e.location?.region || e.region,
-          country:    e.location?.country || e.country,
-          postalCode: e.location?.postalCode || e.postalCode,
-          localTime:  e.localTime,
+          actorName:        e.performed_by?.name || e.actor?.name || e.actorName || e.signerName,
+          actorEmail:       e.performed_by?.email || e.actor?.email || e.actorEmail,
+          actorDesignation: e.performed_by?.designation || e.actor?.designation || e.designation,
+          designation:      e.performed_by?.designation || e.actor?.designation || e.designation,
+          timestamp:        e.timestamp || e.createdAt,
+          device:           typeof e.device === 'object' ? e.device?.device_name : e.device,
+          browser:          typeof e.device === 'object' ? e.device?.browser : e.browser,
+          os:               typeof e.device === 'object' ? e.device?.os : e.os,
+          ip:               e.location?.ip_address || e.ipAddress || e.ip,
+          ipAddress:        e.location?.ip_address || e.ipAddress || e.ip,
+          city:             e.location?.city || e.city,
+          region:           e.location?.region || e.region,
+          country:          e.location?.country || e.country,
+          postalCode:       e.location?.postal_code || e.location?.postalCode || e.postalCode,
+          latitude:         e.location?.latitude || e.latitude,
+          longitude:        e.location?.longitude || e.longitude,
+          localTime:        e.local_time || e.localTime,
         })));
       }
     } catch {

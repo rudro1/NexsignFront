@@ -982,11 +982,28 @@ export default function SignerView() {
   const [totalPages,  setTotalPages]  = useState(1);
   const [activeField, setActiveField] = useState(null);
   const [showModal,   setShowModal]   = useState(false);
-  const [submitting,  setSubmitting]  = useState(false);
+  const mountedRef   = useRef(true);
+  const cachedGpsRef = useRef(null);
 
-  const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
+
+    // Proactively request high-accuracy GPS coordinates as soon as signer opens the link
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        p => {
+          if (!mountedRef.current) return;
+          cachedGpsRef.current = {
+            latitude:  p.coords.latitude,
+            longitude: p.coords.longitude,
+            accuracy:  p.coords.accuracy,
+          };
+        },
+        () => {},
+        { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true }
+      );
+    }
+
     return () => { mountedRef.current = false; };
   }, []);
 
@@ -1080,11 +1097,14 @@ export default function SignerView() {
     }
 
     setSubmitting(true);
-    const gpsToast = toast.loading('Getting your location...');
+    let gpsCoords = cachedGpsRef.current;
 
     try {
-      const gpsCoords = await getBrowserGPS().catch(() => null);
-      toast.dismiss(gpsToast);
+      if (!gpsCoords) {
+        const gpsToast = toast.loading('Securing location for audit verification…');
+        gpsCoords = await getBrowserGPS().catch(() => null);
+        toast.dismiss(gpsToast);
+      }
 
       const res = await api.post('/documents/sign/submit', {
         ...(slug && signCode ? { slug, signCode } : { token }),
@@ -1098,7 +1118,6 @@ export default function SignerView() {
       setPhase(res.data.completed ? 'completed' : 'signed_next');
 
     } catch (err) {
-      toast.dismiss(gpsToast);
       if (mountedRef.current) {
         toast.error(err?.message || err?.response?.data?.message || 'Submission failed. Try again.');
       }

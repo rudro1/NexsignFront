@@ -3627,14 +3627,29 @@ export default function TemplateSigner() {
   const [declining,   setDeclining]   = useState(false);
   const [phase,       setPhase]       = useState('signing'); // 'signing' | 'signed' | 'declined'
 
-  // Audit meta — collected on mount
+  // Audit meta & GPS — collected proactively on mount
   const auditMetaRef = useRef(null);
+  const cachedGpsRef = useRef(null);
 
-  // ── Collect audit meta on mount (non-blocking) ──────────────────────────
+  // ── Collect audit meta & GPS on mount (non-blocking) ──────────────────────
   useEffect(() => {
     collectAuditMeta()
       .then(m => { auditMetaRef.current = m; })
       .catch(()  => { auditMetaRef.current = {}; });
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        p => {
+          cachedGpsRef.current = {
+            latitude:  p.coords.latitude,
+            longitude: p.coords.longitude,
+            accuracy:  p.coords.accuracy,
+          };
+        },
+        () => {},
+        { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true }
+      );
+    }
   }, []);
 
   // ── Load session ─────────────────────────────────────────────────────────
@@ -3711,8 +3726,11 @@ export default function TemplateSigner() {
 
     setSubmitting(true);
     try {
-      toast.info('Recording secure location for audit trail…', { duration: 2500 });
-      const gpsCoords = await getBrowserGPS().catch(() => null);
+      let gpsCoords = cachedGpsRef.current;
+      if (!gpsCoords) {
+        toast.info('Recording secure location for audit trail…', { duration: 2000 });
+        gpsCoords = await getBrowserGPS().catch(() => null);
+      }
 
       const fieldValues = toFieldValues(
         fields.filter(f => f.type !== 'signature' && f.type !== 'initial'),
