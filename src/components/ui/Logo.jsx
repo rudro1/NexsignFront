@@ -4,13 +4,13 @@ import { Link } from 'react-router-dom';
 const cn = (...c) => c.filter(Boolean).join(' ');
 
 const SIZES = {
-  sm: { img: 'w-6 h-6 sm:w-7 sm:h-7',       word: 'text-base' },
-  md: { img: 'w-7.5 h-7.5 sm:w-8.5 sm:h-8.5', word: 'text-lg sm:text-xl' },
-  lg: { img: 'w-9 h-9 sm:w-10 sm:h-10',     word: 'text-xl sm:text-2xl' },
+  sm: { img: 'w-5 h-5',             word: 'text-sm font-bold' },
+  md: { img: 'w-6 h-6 sm:w-7 sm:h-7', word: 'text-sm sm:text-base font-bold' },
+  lg: { img: 'w-8 h-8',             word: 'text-lg font-bold' },
 };
 
 /**
- * NexSign brand mark — official new NS pen logo mark with transparent background.
+ * NexSign brand mark — sleek, compact official NS pen logo.
  */
 export function NexSignLogo({
   size = 'md',
@@ -22,8 +22,8 @@ export function NexSignLogo({
 }) {
   const s = SIZES[size] || SIZES.md;
   const wordClass = tone === 'light'
-    ? 'font-extrabold text-white tracking-tight leading-none'
-    : 'font-extrabold text-slate-900 dark:text-white tracking-tight leading-none';
+    ? 'text-white tracking-tight leading-none'
+    : 'text-slate-900 dark:text-white tracking-tight leading-none';
 
   const content = (
     <div className={cn('flex items-center gap-1.5 shrink-0 group', className)}>
