@@ -982,6 +982,7 @@ export default function SignerView() {
   const [totalPages,  setTotalPages]  = useState(1);
   const [activeField, setActiveField] = useState(null);
   const [showModal,   setShowModal]   = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
   const mountedRef   = useRef(true);
   const cachedGpsRef = useRef(null);
 
