@@ -234,7 +234,7 @@ export default function Pricing() {
       <main>
 
         {/* ── Hero ──────────────────────────────────────────────── */}
-        <section className="relative py-20 lg:py-28 overflow-hidden">
+        <section className="relative pt-8 pb-16 sm:pt-12 sm:pb-20 lg:pt-14 lg:pb-24 overflow-hidden">
           {/* bg */}
           <div className="absolute inset-0 -z-10">
             <div className="absolute inset-0 bg-gradient-to-b from-sky-50/60 via-white to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950" />

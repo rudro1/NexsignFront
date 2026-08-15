@@ -298,7 +298,7 @@ function HeroSection() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-16">
+    <section className="relative flex flex-col items-center justify-center overflow-hidden pt-16 sm:pt-18">
 
       {/* Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -316,10 +316,10 @@ function HeroSection() {
         <div className="absolute bottom-1/4 -right-32 w-[500px] h-[500px] bg-violet-400/10 dark:bg-violet-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 flex flex-col items-center text-center">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 flex flex-col items-center text-center">
 
         {/* Top badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 mb-8">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 mb-6">
           <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
           <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
             Trusted by 50,000+ professionals worldwide
@@ -476,7 +476,7 @@ function StatsSection() {
   }, []);
 
   return (
-    <section ref={ref} className="py-20 bg-slate-900 dark:bg-black">
+    <section ref={ref} className="py-12 sm:py-16 bg-slate-900 dark:bg-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
           {STATS.map(({ display, label, icon: Icon, color }, i) => (
@@ -520,7 +520,7 @@ function FeaturesSection() {
   }, []);
 
   return (
-    <section id="features" ref={ref} className="py-24 lg:py-32 bg-white dark:bg-slate-900">
+    <section id="features" ref={ref} className="py-16 sm:py-20 lg:py-24 bg-white dark:bg-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <SectionLabel>Features</SectionLabel>
@@ -586,7 +586,7 @@ function HowItWorksSection() {
   }, []);
 
   return (
-    <section id="how-it-works" ref={ref} className="py-24 lg:py-32 bg-slate-50 dark:bg-slate-950">
+    <section id="how-it-works" ref={ref} className="py-16 sm:py-20 lg:py-24 bg-slate-50 dark:bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <SectionLabel>How It Works</SectionLabel>
@@ -666,7 +666,7 @@ function TestimonialsSection() {
   }, []);
 
   return (
-    <section id="testimonials" ref={ref} className="py-24 lg:py-32 bg-white dark:bg-slate-900">
+    <section id="testimonials" ref={ref} className="py-16 sm:py-20 lg:py-24 bg-white dark:bg-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <SectionLabel>Testimonials</SectionLabel>
@@ -731,7 +731,7 @@ function CTASection() {
   const navigate = useNavigate();
 
   return (
-    <section className="py-24 lg:py-32 relative overflow-hidden bg-slate-900 dark:bg-black">
+    <section className="py-16 sm:py-20 lg:py-24 relative overflow-hidden bg-slate-900 dark:bg-black">
       {/* Mesh gradient */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-sky-600/30 via-transparent to-violet-600/30" />
