@@ -84,17 +84,22 @@ function ScrollToTop() {
 // ════════════════════════════════════════════════════════════════
 function AppLoader() {
   return (
-    <div className="h-screen flex flex-col items-center 
-                    justify-center gap-5 
-                    bg-white dark:bg-slate-950">
-      <NexSignLogo size="lg" asLink={false} className="mb-2" />
-      <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 
-                        border-slate-200 dark:border-slate-800" />
-        <div className="absolute inset-0 rounded-full border-4 
-                        border-t-sky-500 animate-spin" />
+    <div className="h-screen flex flex-col items-center justify-center gap-4 bg-white dark:bg-slate-950">
+      <div className="flex items-center gap-3">
+        <img
+          src="/nexsign-logo-dark.png"
+          alt="NexSign"
+          className="w-12 h-12 rounded-2xl object-cover shadow-lg border border-slate-200/80 dark:border-slate-800"
+        />
+        <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+          NexSign
+        </span>
       </div>
-      <p className="text-sm text-slate-400 font-medium animate-pulse">
+      <div className="relative w-7 h-7 mt-2">
+        <div className="absolute inset-0 rounded-full border-2 border-slate-200 dark:border-slate-800" />
+        <div className="absolute inset-0 rounded-full border-2 border-t-sky-500 animate-spin" />
+      </div>
+      <p className="text-xs text-slate-400 font-medium tracking-wide animate-pulse">
         Loading…
       </p>
     </div>
@@ -103,13 +108,15 @@ function AppLoader() {
 
 export function PageLoader() {
   return (
-    <div className="h-screen flex items-center justify-center 
-                    bg-white dark:bg-slate-950">
-      <div className="relative w-8 h-8">
-        <div className="absolute inset-0 rounded-full border-4 
-                        border-slate-200 dark:border-slate-800" />
-        <div className="absolute inset-0 rounded-full border-4 
-                        border-t-sky-500 animate-spin" />
+    <div className="h-screen flex flex-col items-center justify-center gap-3 bg-white dark:bg-slate-950">
+      <img
+        src="/nexsign-logo-dark.png"
+        alt="NexSign"
+        className="w-10 h-10 rounded-xl object-cover shadow-md border border-slate-200/80 dark:border-slate-800 animate-pulse"
+      />
+      <div className="relative w-6 h-6">
+        <div className="absolute inset-0 rounded-full border-2 border-slate-200 dark:border-slate-800" />
+        <div className="absolute inset-0 rounded-full border-2 border-t-sky-500 animate-spin" />
       </div>
     </div>
   );
