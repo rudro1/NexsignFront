@@ -12,7 +12,6 @@ const NO_NAVBAR_PATTERNS = [
   /^\/login$/,
   /^\/register$/,
   /^\/$/, // Landing has own Navbar
-  /^\/pricing$/, // Pricing has own Navbar
 ];
 
 // Full-width (no max-w, no padding) routes

@@ -1327,7 +1327,6 @@ export default function Dashboard() {
                              leading-tight">
                 {greet},{' '}
                 <span className="text-sky-500">{firstName}</span>
-                {' '}👋
               </h1>
               {isSyncing && (
                 <Loader2 className="w-3.5 h-3.5 animate-spin
