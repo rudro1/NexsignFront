@@ -30,24 +30,12 @@ export function NexSignLogo({
   const content = (
     <div className={cn('flex items-center gap-2.5 shrink-0 group', className)}>
       <div className="relative shrink-0 flex items-center justify-center">
-        {/* Light mode logo */}
         <img
-          src="/nexsign-logo-light.png"
+          src="/nexsign-logo.png"
           alt="NexSign"
           className={cn(
             s.img,
-            'object-cover select-none transition-transform duration-200 group-hover:scale-105 shadow-sm border border-slate-200/80',
-            isDarkTone ? 'hidden' : 'block dark:hidden',
-          )}
-        />
-        {/* Dark mode logo */}
-        <img
-          src="/nexsign-logo-dark.png"
-          alt="NexSign"
-          className={cn(
-            s.img,
-            'object-cover select-none transition-transform duration-200 group-hover:scale-105 shadow-sm border border-slate-800',
-            isDarkTone ? 'block' : 'hidden dark:block',
+            'object-cover select-none transition-transform duration-200 group-hover:scale-105 shadow-sm border border-slate-200/80 dark:border-slate-800 bg-white',
           )}
         />
       </div>

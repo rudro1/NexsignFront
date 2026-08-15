@@ -87,7 +87,7 @@ function AppLoader() {
     <div className="h-screen flex flex-col items-center justify-center gap-4 bg-white dark:bg-slate-950">
       <div className="flex items-center gap-3">
         <img
-          src="/nexsign-logo-dark.png"
+          src="/nexsign-logo.png"
           alt="NexSign"
           className="w-12 h-12 rounded-2xl object-cover shadow-lg border border-slate-200/80 dark:border-slate-800"
         />
@@ -110,7 +110,7 @@ export function PageLoader() {
   return (
     <div className="h-screen flex flex-col items-center justify-center gap-3 bg-white dark:bg-slate-950">
       <img
-        src="/nexsign-logo-dark.png"
+        src="/nexsign-logo.png"
         alt="NexSign"
         className="w-10 h-10 rounded-xl object-cover shadow-md border border-slate-200/80 dark:border-slate-800 animate-pulse"
       />
