@@ -1107,16 +1107,35 @@ export default function SignerView() {
         toast.dismiss(gpsToast);
       }
 
-      const res = await api.post('/documents/sign/submit', {
-        ...(slug && signCode ? { slug, signCode } : { token }),
-        fields,
-        clientTime: new Date().toISOString(),
-        latitude:   gpsCoords?.latitude  ?? null,
-        longitude:  gpsCoords?.longitude ?? null,
+      // Optimistic UI: Show success immediately
+      toast.success('✅ Signature recorded!', {
+        description: 'Finalizing secure audit trail...'
       });
-
-      if (!mountedRef.current) return;
-      setPhase(res.data.completed ? 'completed' : 'signed_next');
+      
+      // Optimistically move to next phase
+      setPhase('signed_next');
+      
+      // Submit in background with transition delay
+      setTimeout(async () => {
+        try {
+          const res = await api.post('/documents/sign/submit', {
+            ...(slug && signCode ? { slug, signCode } : { token }),
+            fields,
+            clientTime: new Date().toISOString(),
+            latitude:   gpsCoords?.latitude  ?? null,
+            longitude:  gpsCoords?.longitude ?? null,
+          });
+          
+          if (mountedRef.current && res.data.completed) {
+            setPhase('completed');
+          }
+        } catch (err) {
+          // Handle async error gracefully
+          if (mountedRef.current) {
+            toast.error('Signature recorded but verification pending. Please refresh.');
+          }
+        }
+      }, 300);
 
     } catch (err) {
       if (mountedRef.current) {

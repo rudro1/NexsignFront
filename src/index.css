@@ -128,3 +128,8 @@
     background: rgba(148, 163, 184, 0.7);
   }
 }
+
+/* Smooth Transitions */
+button { transition: all 200ms ease-in-out; }
+input, textarea, select { transition: border-color 200ms ease-in-out; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

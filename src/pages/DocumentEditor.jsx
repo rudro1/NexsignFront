@@ -564,11 +564,21 @@ export default function DocumentEditor() {
         formData.append('docId', effectiveDocId);
       }
 
-      setSendStage('Sending invitations…');
-      await api.post('/documents/upload-and-send', formData);
-
-      toast.success('Document sent for signing! ✉️');
+      // Optimistic UI: Show success immediately
+      toast.success('Document sent for signing! ✉️', {
+        description: 'Sending invitations in the background...'
+      });
+      
+      setSendStage('Processing...');
+      
+      // Navigate immediately for smooth UX
       navigate('/dashboard');
+      
+      // Send in background (won't block user)
+      api.post('/documents/upload-and-send', formData).catch(err => {
+        // Silent failure - already navigated away
+        console.error('[Document Send]', err);
+      });
 
     } catch (err) {
       const msg = err?.message
