@@ -325,14 +325,16 @@ export default function App() {
               <Toaster
                 position="top-right"
                 richColors
+                closeButton
                 expand={false}
                 toastOptions={{
-                  duration: 3500,
+                  duration: 4000,
                   style: { zIndex: 9999 },
                   classNames: {
                     toast: 'rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl',
                     title: 'font-bold text-sm',
                     description: 'text-xs text-slate-500',
+                    closeButton: 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white',
                   },
                 }}
               />
