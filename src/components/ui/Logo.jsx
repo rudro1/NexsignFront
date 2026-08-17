@@ -4,9 +4,18 @@ import { Link } from 'react-router-dom';
 const cn = (...c) => c.filter(Boolean).join(' ');
 
 const SIZES = {
-  sm: { img: 'w-7.5 h-7.5',              word: 'text-sm sm:text-base font-bold' },
-  md: { img: 'w-9.5 h-9.5 sm:w-11 sm:h-11', word: 'text-lg sm:text-xl font-bold' },
-  lg: { img: 'w-13 h-13 sm:w-15 sm:h-15', word: 'text-2xl sm:text-3xl font-black' },
+  sm: {
+    img:  'w-7 h-7 sm:w-8 sm:h-8',
+    word: 'text-sm sm:text-base font-bold',
+  },
+  md: {
+    img:  'w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11',
+    word: 'text-base sm:text-lg md:text-xl lg:text-2xl font-black',
+  },
+  lg: {
+    img:  'w-11 h-11 sm:w-13 sm:h-13 md:w-15 md:h-15 lg:w-16 lg:h-16',
+    word: 'text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black',
+  },
 };
 
 /**

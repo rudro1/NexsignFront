@@ -53,6 +53,7 @@ const FieldOverlay = React.memo(({
   field, canvasSize, canvasSizeRef,
   party, isSelected, readOnly,
   onSelect, onUpdate, onRemove,
+  onInteractStart, onInteractEnd,
 }) => {
   const color     = party?.color ||
     PARTY_COLORS[field.partyIndex % PARTY_COLORS.length];
@@ -81,14 +82,20 @@ const FieldOverlay = React.memo(({
       minHeight={20}
       className="z-20"
       style={{ position: 'absolute' }}
-      // ✅ Touch support for drag
       enableUserSelectHack={false}
+      onDragStart={() => {
+        onInteractStart?.();
+      }}
       onDragStop={(_, d) => {
         const s = canvasSizeRef.current;
         onUpdate(field.id, {
           x: +((d.x / s.width)  * 100).toFixed(4),
           y: +((d.y / s.height) * 100).toFixed(4),
         });
+        setTimeout(() => onInteractEnd?.(), 150);
+      }}
+      onResizeStart={() => {
+        onInteractStart?.();
       }}
       onResizeStop={(_, __, ref, ___, pos) => {
         const s = canvasSizeRef.current;
@@ -98,12 +105,25 @@ const FieldOverlay = React.memo(({
           x:      +((pos.x / s.width)  * 100).toFixed(4),
           y:      +((pos.y / s.height) * 100).toFixed(4),
         });
+        setTimeout(() => onInteractEnd?.(), 150);
       }}
     >
       <div
         onClick={e => {
           e.stopPropagation();
           if (!readOnly) onSelect?.(field.id);
+        }}
+        onTouchStart={e => {
+          e.stopPropagation();
+          onInteractStart?.();
+        }}
+        onTouchEnd={e => {
+          e.stopPropagation();
+          setTimeout(() => onInteractEnd?.(), 150);
+        }}
+        onMouseDown={e => {
+          e.stopPropagation();
+          onInteractStart?.();
         }}
         className={cn(
           'w-full h-full border-2 flex flex-col items-center',
@@ -387,11 +407,14 @@ export default function PdfViewer({
     return () => window.removeEventListener('keydown', handler);
   }, [readOnly, selectedFieldId, onFieldsChange, onFieldSelect]);
 
+  const isInteractingRef = useRef(false);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+
   // ════════════════════════════════════════════════════════════
-  // ✅ FIXED: Field placement — supports BOTH mouse AND touch
+  // ✅ FIXED: Field placement — supports BOTH mouse AND touch without false touches
   // ════════════════════════════════════════════════════════════
   const placeField = useCallback((clientX, clientY) => {
-    if (readOnly || !pendingFieldType || !rendered) return;
+    if (readOnly || !pendingFieldType || !rendered || isInteractingRef.current) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -434,18 +457,35 @@ export default function PdfViewer({
 
   // ✅ Mouse click handler
   const handleOverlayClick = useCallback((e) => {
-    if (readOnly || !pendingFieldType || !rendered) return;
-    // ✅ allow click anywhere on overlay — removed strict target check
+    if (readOnly || !pendingFieldType || !rendered || isInteractingRef.current) return;
+    if (e.target !== overlayRef.current && e.target.closest('.react-draggable')) return;
     placeField(e.clientX, e.clientY);
   }, [readOnly, pendingFieldType, rendered, placeField]);
 
-  // ✅ Touch handler — NEW
-  const handleOverlayTouch = useCallback((e) => {
-    if (readOnly || !pendingFieldType || !rendered) return;
-    // Prevent scroll when placing field
-    e.preventDefault();
-    const touch = e.changedTouches[0];
+  // ✅ Touch start handler
+  const handleOverlayTouchStart = useCallback((e) => {
+    const touch = e.touches?.[0] || e.changedTouches?.[0];
+    if (touch) {
+      touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    }
+  }, []);
+
+  // ✅ Touch end handler — validates touch move distance to prevent false placement on scroll/resize
+  const handleOverlayTouchEnd = useCallback((e) => {
+    if (readOnly || !pendingFieldType || !rendered || isInteractingRef.current) return;
+    const touch = e.changedTouches?.[0];
     if (!touch) return;
+
+    // If user scrolled or moved touch by more than 8px, do not place field
+    const dist = Math.hypot(
+      touch.clientX - touchStartPosRef.current.x,
+      touch.clientY - touchStartPosRef.current.y
+    );
+    if (dist > 8) return;
+
+    if (e.target !== overlayRef.current && e.target.closest('.react-draggable')) return;
+
+    e.preventDefault();
     placeField(touch.clientX, touch.clientY);
   }, [readOnly, pendingFieldType, rendered, placeField]);
 
@@ -607,19 +647,19 @@ export default function PdfViewer({
               className="block rounded-sm"
               style={{ display: 'block' }} />
 
-            {/* ✅ Overlay — mouse + touch both handled */}
+            {/* ✅ Overlay — mouse + touch both handled without false touches */}
             <div
               ref={overlayRef}
               className="absolute inset-0"
               style={{
                 cursor: pendingFieldType && !readOnly
                   ? 'crosshair' : 'default',
-                // ✅ touch-action: none — prevent scroll when placing
                 touchAction: pendingFieldType && !readOnly
                   ? 'none' : 'auto',
               }}
               onClick={handleOverlayClick}
-              onTouchEnd={handleOverlayTouch}
+              onTouchStart={handleOverlayTouchStart}
+              onTouchEnd={handleOverlayTouchEnd}
             >
               {/* Field overlays */}
               {rendered && canvasSize.width > 0 && currentPageFields.map(field => (
@@ -634,6 +674,8 @@ export default function PdfViewer({
                   onSelect={onFieldSelect}
                   onUpdate={updateField}
                   onRemove={removeField}
+                  onInteractStart={() => { isInteractingRef.current = true; }}
+                  onInteractEnd={() => { isInteractingRef.current = false; }}
                 />
               ))}
             </div>
