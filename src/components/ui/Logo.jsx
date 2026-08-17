@@ -1,8 +1,8 @@
 import React, { useId } from "react";
+import LogoIcon from "./LogoIcon";
 
 const palettes = {
   light: {
-    background: "#FFFFFF",
     wordmark: "#111214",
     barrel: "#4FA3D1",
     barrelLight: "#8FCBEA",
@@ -10,10 +10,8 @@ const palettes = {
     tip: "#1B1E24",
     lead: "#0A0B0D",
     eraser: "#D9E4EC",
-    signature: "#2E7CAA",
   },
   dark: {
-    background: "#111214",
     wordmark: "#F5F7FA",
     barrel: "#6FBBE3",
     barrelLight: "#A9DCF7",
@@ -21,19 +19,22 @@ const palettes = {
     tip: "#EEF6FB",
     lead: "#0A0B0D",
     eraser: "#3B4557",
-    signature: "#6FBBE3",
   },
 };
 
 export default function Logo({ dark = false, size = "md", tone = "auto", asLink = true }) {
   const gradientId = useId();
-  const colors = dark || tone === "light" ? palettes.dark : palettes.light;
+  const isDark = dark || tone === "light";
+  const colors = isDark ? palettes.dark : palettes.light;
 
-  const sizeMap = { sm: 32, md: 48, lg: 64 };
-  const fontSize = sizeMap[size] || 48;
+  // Smaller, more compact sizes
+  const sizeMap = { sm: 20, md: 28, lg: 36 };
+  const fontSize = sizeMap[size] || 28;
+  const iconSize = fontSize * 1.4;
 
   return (
-    <div style={{ display: "inline-block" }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: fontSize * 0.4 }}>
+      {/* Wordmark with pencil */}
       <div style={{ position: "relative", display: "inline-block" }}>
         <div
           style={{
@@ -50,14 +51,15 @@ export default function Logo({ dark = false, size = "md", tone = "auto", asLink 
           aria-label="NexSign"
         >
           <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800 }}>N</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600 }}>e</span>
+          <span style={{ fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, marginLeft: "-0.02em" }}>e</span>
           <span style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>x</span>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800 }}>S</span>
-          <span style={{ fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600 }}>i</span>
+          <span style={{ fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, marginLeft: "-0.02em" }}>i</span>
           <span style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>g</span>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800 }}>n</span>
         </div>
 
+        {/* Pencil */}
         <svg
           style={{
             position: "absolute",
@@ -68,9 +70,11 @@ export default function Logo({ dark = false, size = "md", tone = "auto", asLink 
             height: fontSize * 0.58,
             transform: "rotate(38deg)",
             transformOrigin: "left center",
+            transition: "transform 0.3s ease",
           }}
           viewBox="0 0 150 44"
           xmlns="http://www.w3.org/2000/svg"
+          className="nexsign-pencil"
         >
           <defs>
             <linearGradient id={`barrel-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
@@ -86,6 +90,9 @@ export default function Logo({ dark = false, size = "md", tone = "auto", asLink 
           <rect x="-6" y="14" width="10" height="16" rx="2" fill={colors.eraser} />
         </svg>
       </div>
+
+      {/* Icon on the right */}
+      <LogoIcon size={iconSize} />
     </div>
   );
 }
