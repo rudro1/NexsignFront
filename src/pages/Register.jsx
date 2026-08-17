@@ -183,8 +183,8 @@ function OtpVerificationScreen({
 
           {/* Security Note */}
           <div className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span>Code is valid for 10 minutes &bull; Free but Secure</span>
+            <ShieldCheck className="w-4 h-4 text-sky-500 shrink-0" />
+            <span>Code is valid for 10 minutes</span>
           </div>
 
           {/* Verify Button */}
